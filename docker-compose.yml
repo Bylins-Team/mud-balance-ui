@@ -5,6 +5,10 @@ services:
       dockerfile: Dockerfile
     image: mud-balance-ui:local
     container_name: mud-balance-ui
+    # Run as host user so files written into the runs/ volume are owned by
+    # the developer, not root. UID:GID matches the typical first non-root
+    # user on a Linux host (kvirund's account on overseer is 1000:1000).
+    user: "1000:1000"
     # No host port: gateway reaches us via the shared `gateway` network by
     # service hostname (mud-balance-ui:5001). Exposing on host would just
     # add attack surface. For local dev without the gateway, uncomment:

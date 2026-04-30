@@ -80,7 +80,13 @@ ENV MUD_SIM_BIN=/opt/mud-sim \
     MUD_SIM_WORLD_DIR=/opt/small \
     RUNS_DIR=/data/runs \
     MUD_SIM_TIMEOUT_S=120 \
-    FLASK_APP=app
+    FLASK_APP=app \
+    HOME=/tmp
+
+# Ensure /data/runs is writable for any UID compose chooses. Without this
+# the bind-mounted host dir would inherit container-root ownership; we
+# override via compose `user: "1000:1000"` (or whatever the host UID is).
+RUN mkdir -p /data/runs && chmod 0777 /data/runs
 
 VOLUME ["/data/runs"]
 EXPOSE 5001
