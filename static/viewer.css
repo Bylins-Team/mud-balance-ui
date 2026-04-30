@@ -684,8 +684,6 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   background: var(--bg-elev);
   border-radius: 4px;
   padding: 12px;
-  min-height: 240px;
-  display: flex; flex-direction: column;
 }
 .chart-card h3 {
   margin: 0 0 8px;
@@ -695,7 +693,14 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   letter-spacing: 0.08em;
   font-weight: 500;
 }
-.chart-card canvas { flex: 1; min-height: 0; }
+/* Chart.js responsive containers MUST have an explicit pixel height,
+   otherwise canvas + flex layout fight over height each frame and the
+   chart grows infinitely. Wrap canvas in a fixed-height div. */
+.chart-card .chart-wrap {
+  position: relative;
+  height: 240px;
+}
+.chart-card canvas { display: block; }
 
 /* viewer layout: 3 columns + bottom timeline. Computed-grid heights. */
 .viewer { display: flex; flex-direction: column; gap: 12px; }
