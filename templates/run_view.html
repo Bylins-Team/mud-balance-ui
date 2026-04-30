@@ -2,76 +2,134 @@
 {% block title %}{{ meta.get('attacker', '?') }} vs {{ meta.get('victim', '?') }} — mud-balance-ui{% endblock %}
 {% block content %}
 <header class="run-header">
-  <h1>{{ meta.get('attacker', '?') }} <small>vs</small> {{ meta.get('victim', '?') }}</h1>
+  <div class="run-header-main">
+    <h1>
+      <span class="vs-attacker">{{ meta.get('attacker', '?') }}</span>
+      <span class="vs-sep">vs</span>
+      <span class="vs-victim">{{ meta.get('victim', '?') }}</span>
+    </h1>
+    <a class="back-link" href="{{ url_for('ui.runs_list') }}">← все прогоны</a>
+  </div>
   <dl class="run-stats">
-    <dt>dpr</dt><dd>{{ meta.get('dpr', 0) }}</dd>
-    <dt>hit rate</dt><dd>{{ meta.get('hit_rate_pct', 0) }}%</dd>
-    <dt>раундов</dt><dd>{{ meta.get('rounds', 0) }}</dd>
-    <dt>статус</dt><dd>{{ meta.get('status', '?') }}</dd>
+    <div><dt>dpr</dt><dd>{{ meta.get('dpr', 0) }}</dd></div>
+    <div><dt>hit&nbsp;rate</dt><dd>{{ meta.get('hit_rate_pct', 0) }}%</dd></div>
+    <div><dt>раундов</dt><dd>{{ meta.get('rounds', 0) }}</dd></div>
+    <div><dt>событий</dt><dd>{{ meta.get('events_total', 0) }}</dd></div>
+    <div class="status-{{ meta.get('status', '?') }}"><dt>статус</dt><dd>{{ meta.get('status', '?') }}</dd></div>
   </dl>
 </header>
 
-{% set duration_ms = (meta.get('last_ts_ms') or 0) - (meta.get('first_ts_ms') or 0) %}
-{% set duration_s = (duration_ms / 1000) if duration_ms > 0 else 1 %}
+{% set total_rounds = meta.get('rounds', 0) %}
+{% set max_round = total_rounds - 1 if total_rounds > 0 else 0 %}
+
+<details class="scenario-source">
+  <summary>YAML сценария</summary>
+  <pre>{{ meta.get('scenario_yaml', '') }}</pre>
+</details>
 
 <section class="viewer"
          data-run-id="{{ handle.run_id }}"
-         data-duration="{{ duration_s }}"
-         data-initial-t="{{ initial_t }}"
+         data-max-round="{{ max_round }}"
+         data-initial-round="{{ initial_round }}"
          data-initial-role="{{ initial_role }}">
-  <aside class="viewer-roles">
-    <h2>Роль</h2>
-    <select id="role-select" name="role">
-      <option value="attacker"{% if initial_role == 'attacker' %} selected{% endif %}>attacker</option>
-      <option value="victim"{% if initial_role == 'victim' %} selected{% endif %}>victim</option>
-    </select>
-    <div id="state-panel" class="state-panel">{# loaded via HTMX on slider input #}</div>
-  </aside>
 
-  <section class="viewer-log">
-    <h2>Combat log</h2>
-    <div id="log-panel" class="log-panel"></div>
-  </section>
+  <div class="viewer-row">
+    <aside class="viewer-roles panel">
+      <div class="panel-header">
+        <h2>Участник</h2>
+        <select id="role-select" name="role">
+          <option value="attacker"{% if initial_role == 'attacker' %} selected{% endif %}>attacker</option>
+          <option value="victim"{% if initial_role == 'victim' %} selected{% endif %}>victim</option>
+        </select>
+      </div>
+      <div id="state-panel" class="panel-body state-panel">
+        <p class="empty">Загрузка…</p>
+      </div>
+    </aside>
 
-  <section class="viewer-screen">
-    <h2>Screen output</h2>
-    <pre id="screen-panel" class="screen-panel"></pre>
-  </section>
+    <section class="viewer-log panel">
+      <div class="panel-header"><h2>Combat log</h2></div>
+      <div id="log-panel" class="panel-body log-panel">
+        <p class="empty">Загрузка…</p>
+      </div>
+    </section>
+
+    <section class="viewer-screen panel">
+      <div class="panel-header"><h2>Screen output</h2></div>
+      <pre id="screen-panel" class="panel-body screen-panel"><span class="empty">Загрузка…</span></pre>
+    </section>
+  </div>
 
   <footer class="viewer-timeline">
-    <input type="range" id="time-slider"
-           min="0" max="{{ duration_s }}" step="0.1"
-           value="{{ initial_t }}">
-    <span id="time-display">{{ initial_t }}s / {{ '%.1f'|format(duration_s) }}s</span>
+    <button id="btn-prev" type="button" class="round-step" aria-label="предыдущий раунд">‹</button>
+    <input type="range" id="round-slider"
+           min="-1" max="{{ max_round }}" step="1"
+           value="{{ initial_round }}"
+           list="round-ticks">
+    <datalist id="round-ticks">
+      <option value="-1" label="старт">
+      {% for n in range(0, total_rounds) %}
+      <option value="{{ n }}" label="{{ n }}">
+      {% endfor %}
+    </datalist>
+    <button id="btn-next" type="button" class="round-step" aria-label="следующий раунд">›</button>
+    <span id="round-display">round <strong>{{ initial_round }}</strong> / {{ max_round }}</span>
   </footer>
 </section>
 
 <script>
 (function () {
   const viewer = document.querySelector('.viewer');
-  const slider = document.getElementById('time-slider');
-  const display = document.getElementById('time-display');
+  const slider = document.getElementById('round-slider');
+  const display = document.getElementById('round-display');
   const roleSelect = document.getElementById('role-select');
+  const btnPrev = document.getElementById('btn-prev');
+  const btnNext = document.getElementById('btn-next');
   const runId = viewer.dataset.runId;
-  const duration = parseFloat(viewer.dataset.duration);
+  const maxRound = parseInt(viewer.dataset.maxRound, 10);
 
   function refresh() {
-    const t = slider.value;
+    const r = slider.value;
     const role = roleSelect.value;
-    display.textContent = `${parseFloat(t).toFixed(1)}s / ${duration.toFixed(1)}s`;
+    const label = (r === '-1') ? 'старт' : r;
+    display.innerHTML = `round <strong>${label}</strong> / ${maxRound}`;
     const url = `/runs/${runId}/api`;
-    htmx.ajax('GET', `${url}/state?t=${t}&role=${role}`, '#state-panel');
-    htmx.ajax('GET', `${url}/log?t=${t}`, '#log-panel');
-    htmx.ajax('GET', `${url}/screen?t=${t}&role=${role}`, '#screen-panel');
-    history.replaceState({}, '', `?t=${t}&role=${role}`);
+    if (window.htmx) {
+      htmx.ajax('GET', `${url}/state?round=${r}&role=${role}`, '#state-panel');
+      htmx.ajax('GET', `${url}/log?round=${r}`, '#log-panel');
+      htmx.ajax('GET', `${url}/screen?round=${r}&role=${role}`, '#screen-panel');
+    } else {
+      // No-HTMX fallback: plain fetch + innerHTML.
+      fetch(`${url}/state?round=${r}&role=${role}`).then(x => x.text()).then(t => document.getElementById('state-panel').innerHTML = t);
+      fetch(`${url}/log?round=${r}`).then(x => x.text()).then(t => document.getElementById('log-panel').innerHTML = t);
+      fetch(`${url}/screen?round=${r}&role=${role}`).then(x => x.text()).then(t => document.getElementById('screen-panel').innerHTML = t);
+    }
+    history.replaceState({}, '', `?round=${r}&role=${role}`);
   }
 
+  btnPrev.addEventListener('click', () => {
+    const v = parseInt(slider.value, 10);
+    if (v > parseInt(slider.min, 10)) { slider.value = v - 1; refresh(); }
+  });
+  btnNext.addEventListener('click', () => {
+    const v = parseInt(slider.value, 10);
+    if (v < parseInt(slider.max, 10)) { slider.value = v + 1; refresh(); }
+  });
   slider.addEventListener('input', refresh);
   roleSelect.addEventListener('change', refresh);
-  // Wait for HTMX to finish loading, then trigger initial refresh.
-  document.addEventListener('htmx:load', refresh, { once: true });
-  // Fallback if htmx:load already fired.
-  if (window.htmx) refresh();
+  // Keyboard: arrow keys advance the round when slider isn't focused.
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('input,textarea,select')) return;
+    if (e.key === 'ArrowLeft')  btnPrev.click();
+    if (e.key === 'ArrowRight') btnNext.click();
+  });
+
+  // Initial load. Wait for HTMX if present, otherwise fire immediately.
+  if (window.htmx) {
+    refresh();
+  } else {
+    document.addEventListener('DOMContentLoaded', refresh);
+  }
 })();
 </script>
 {% endblock %}

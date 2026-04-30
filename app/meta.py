@@ -13,7 +13,12 @@ from pathlib import Path
 
 
 def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
-    """Walk events.jsonl once, produce a small summary dict for the card."""
+    """Walk events.jsonl once, produce a small summary dict for the card.
+
+    Builds `round_ts`: a list where index = round_no (0..N-1) and value =
+    the ts_ms of that round's `round` event. Used by the viewer to filter
+    timeline-less events (damage/miss/affect_*) by round.
+    """
     total = 0
     damage_sum = 0
     damage_count = 0
@@ -23,6 +28,7 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
     victim_label: str | None = None
     first_ts: int | None = None
     last_ts: int | None = None
+    round_ts: list[int] = []
 
     if events_path.is_file():
         with events_path.open() as fh:
@@ -34,7 +40,8 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
                 total += 1
                 ts = ev.get("ts")
                 if isinstance(ts, int):
-                    first_ts = ts if first_ts is None else first_ts
+                    if first_ts is None:
+                        first_ts = ts
                     last_ts = ts
                 name = ev.get("name")
                 if name == "damage":
@@ -44,6 +51,8 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
                     miss_count += 1
                 elif name == "round":
                     rounds += 1
+                    if isinstance(ts, int):
+                        round_ts.append(ts)
                     if attacker_label is None:
                         attacker_label = ev.get("attacker_class") or (
                             f"mob#{ev.get('attacker_vnum')}"
@@ -65,6 +74,7 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
         "scenario_yaml": scenario_yaml_utf8,
         "events_total": total,
         "rounds": rounds,
+        "round_ts": round_ts,
         "dpr": round(dpr, 2),
         "hit_rate_pct": round(hit_rate, 1),
         "attacker": attacker_label or "?",

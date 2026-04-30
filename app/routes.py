@@ -42,7 +42,9 @@ def runs_list():
 
 @bp.route("/runs/new", methods=["GET"])
 def runs_new():
-    return render_template("runs_new.html", default_yaml=_DEFAULT_SCENARIO)
+    # The form generates its own YAML via JS from structured fields; no
+    # server-side default needed.
+    return render_template("runs_new.html")
 
 
 @bp.route("/runs", methods=["POST"])
@@ -97,8 +99,8 @@ def run_events(run_id: str):
 
 @bp.route("/runs/<run_id>/api/state")
 def api_state(run_id: str):
-    """Latest char_state snapshot for a role with ts <= t."""
-    handle, t_ms = _resolve_handle_and_t(run_id)
+    """Latest char_state snapshot for a role at round <= round_no."""
+    handle, round_no = _resolve_handle_and_round(run_id)
     role = request.args.get("role", "attacker")
     snapshot: dict | None = None
     for ev in _iter_events(handle.events_path):
@@ -106,7 +108,8 @@ def api_state(run_id: str):
             continue
         if ev.get("role") != role:
             continue
-        if int(ev.get("ts", 0)) > t_ms:
+        ev_round = int(ev.get("round", -1))
+        if ev_round > round_no:
             break
         snapshot = ev
     return render_template("partials/state_panel.html", snapshot=snapshot, role=role)
@@ -114,32 +117,47 @@ def api_state(run_id: str):
 
 @bp.route("/runs/<run_id>/api/log")
 def api_log(run_id: str):
-    """All damage/miss/affect_* events with ts <= t, formatted human-readably."""
-    handle, t_ms = _resolve_handle_and_t(run_id)
+    """All damage/miss/affect_* events up to and including round_no.
+
+    These engine-side events don't carry a `round` attribute, so we use
+    the wall-clock cutoff from meta.round_ts (built at run-summary time).
+    """
+    handle, round_no = _resolve_handle_and_round(run_id)
+    cutoff_ms = _round_ts_cutoff(storage.load_meta(handle), round_no)
     entries = []
     for ev in _iter_events(handle.events_path):
-        if int(ev.get("ts", 0)) > t_ms:
+        if cutoff_ms and int(ev.get("ts", 0)) > cutoff_ms:
             break
         name = ev.get("name")
         if name == "damage":
+            verb = "крит" if ev.get("crit") else "удар"
+            charmie = " (питомец)" if ev.get("attacker_is_charmie") else ""
             entries.append({
                 "ts": ev["ts"],
                 "kind": "damage",
-                "text": f"{ev.get('attacker_name', '?')} -> {ev.get('victim_name', '?')}: "
-                        f"{ev.get('dam', 0)} ({'crit' if ev.get('crit') else 'hit'})",
+                "text": f"{ev.get('attacker_name', '?')}{charmie} → "
+                        f"{ev.get('victim_name', '?')}: "
+                        f"{ev.get('dam', 0)} ({verb})",
             })
         elif name == "miss":
             entries.append({
                 "ts": ev["ts"],
                 "kind": "miss",
-                "text": f"{ev.get('attacker_name', '?')} miss "
+                "text": f"{ev.get('attacker_name', '?')} промах "
                         f"({ev.get('reason', '?')})",
             })
-        elif name in ("affect_added", "affect_removed"):
+        elif name == "affect_added":
             entries.append({
                 "ts": ev["ts"],
-                "kind": name,
-                "text": f"{name}: spell={ev.get('spell_id')} on "
+                "kind": "affect_added",
+                "text": f"+ аффект spell_id={ev.get('spell_id')} на "
+                        f"{ev.get('target_name', '?')}",
+            })
+        elif name == "affect_removed":
+            entries.append({
+                "ts": ev["ts"],
+                "kind": "affect_removed",
+                "text": f"− аффект spell_id={ev.get('spell_id')} с "
                         f"{ev.get('target_name', '?')}",
             })
     return render_template("partials/log_panel.html", entries=entries)
@@ -147,8 +165,8 @@ def api_log(run_id: str):
 
 @bp.route("/runs/<run_id>/api/screen")
 def api_screen(run_id: str):
-    """All screen_output events for a role with ts <= t, &-codes -> HTML spans."""
-    handle, t_ms = _resolve_handle_and_t(run_id)
+    """All screen_output events for a role with round <= round_no."""
+    handle, round_no = _resolve_handle_and_round(run_id)
     role = request.args.get("role", "attacker")
     chunks = []
     for ev in _iter_events(handle.events_path):
@@ -156,7 +174,7 @@ def api_screen(run_id: str):
             continue
         if ev.get("role") != role:
             continue
-        if int(ev.get("ts", 0)) > t_ms:
+        if int(ev.get("round", -1)) > round_no:
             break
         chunks.append(colour_to_html(ev.get("text", "")))
     return render_template("partials/screen_panel.html", chunks=chunks, role=role)
@@ -177,19 +195,39 @@ def run_delete(run_id: str):
 # helpers
 # -----------------------------------------------------------------------
 
-def _resolve_handle_and_t(run_id: str):
+def _resolve_handle_and_round(run_id: str) -> tuple[storage.RunHandle, int]:
+    """Resolve a run by id and parse `?round=` from the request.
+
+    Round-based timeline is sturdier than wall-clock seconds: a 5-round
+    duel finishes in 0.4s of real time, so a seconds-slider is useless.
+    Round numbering follows the JSONL: -1 = pre-fight snapshot, 0..N-1
+    are the per-pulse_violence rounds.
+    """
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
     if handle is None:
         abort(404)
     try:
-        t_seconds = float(request.args.get("t", "0"))
+        round_no = int(request.args.get("round", "0"))
     except ValueError:
-        t_seconds = 0.0
-    # `t` is seconds-from-first-event; we resolve to absolute ms via meta.first_ts_ms.
-    meta = storage.load_meta(handle)
-    base = int(meta.get("first_ts_ms", 0))
-    t_ms = base + int(t_seconds * 1000)
-    return handle, t_ms
+        round_no = 0
+    return handle, round_no
+
+
+def _round_ts_cutoff(meta: dict, round_no: int) -> int:
+    """Find the latest ts_ms whose 'round' event has round <= round_no.
+
+    Used to filter timeline-less events (damage, miss, affect_*) by
+    "everything that happened up to and including round N". meta.round_ts
+    is built by app.meta.summarize and indexed by round (-1, 0, 1, ...).
+    """
+    table = meta.get("round_ts") or []
+    if not table:
+        return 0
+    if round_no < 0:
+        return 0
+    if round_no >= len(table):
+        return int(table[-1] or 0)
+    return int(table[round_no] or 0)
 
 
 def _iter_events(events_path: Path):
@@ -203,9 +241,3 @@ def _iter_events(events_path: Path):
                 continue
 
 
-_DEFAULT_SCENARIO = """\
-seed: 42
-rounds: 50
-attacker: { type: player, class: bogatyr, level: 30 }
-victim:   { type: mob, vnum: 102 }
-"""

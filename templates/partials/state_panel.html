@@ -1,15 +1,63 @@
 {% if snapshot %}
-<dl class="state-grid">
-  <dt>HP</dt><dd>{{ snapshot.hp }} / {{ snapshot.max_hp }}</dd>
-  <dt>move</dt><dd>{{ snapshot.move }} / {{ snapshot.max_move }}</dd>
-  <dt>position</dt><dd>{{ snapshot.position }}</dd>
-  <dt>spellpower +</dt><dd>{{ snapshot.spellpower_add_pct }}%</dd>
-  <dt>physdam +</dt><dd>{{ snapshot.physdam_add_pct }}%</dd>
-  <dt>аффектов</dt><dd>{{ snapshot.affects_count }}</dd>
-  {% if snapshot.aff_silence %}<dt>silence</dt><dd>да</dd>{% endif %}
-  {% if snapshot.aff_charmed %}<dt>charmed</dt><dd>да</dd>{% endif %}
-  {% if snapshot.aff_sleep %}<dt>sleep</dt><dd>да</dd>{% endif %}
-</dl>
+{# Stats: only render if at least one is present (older mud-sim builds may not emit them). #}
+{% set has_stats = snapshot.get('str') is not none or snapshot.get('dex') is not none %}
+{% if has_stats %}
+<section class="state-section">
+  <h4>Атрибуты</h4>
+  <div class="stat-row">
+    <div class="stat"><span class="stat-label">сила</span><span class="stat-value">{{ snapshot.get('str', '?') }}</span></div>
+    <div class="stat"><span class="stat-label">ловк</span><span class="stat-value">{{ snapshot.get('dex', '?') }}</span></div>
+    <div class="stat"><span class="stat-label">тело</span><span class="stat-value">{{ snapshot.get('con', '?') }}</span></div>
+    <div class="stat"><span class="stat-label">ум</span><span class="stat-value">{{ snapshot.get('int', '?') }}</span></div>
+    <div class="stat"><span class="stat-label">муд</span><span class="stat-value">{{ snapshot.get('wis', '?') }}</span></div>
+    <div class="stat"><span class="stat-label">обая</span><span class="stat-value">{{ snapshot.get('cha', '?') }}</span></div>
+  </div>
+</section>
+{% endif %}
+
+<section class="state-section">
+  <h4>Жизнь</h4>
+  <dl class="state-grid">
+    <dt>HP</dt><dd>{{ snapshot.hp }} / {{ snapshot.max_hp }}</dd>
+    <dt>move</dt><dd>{{ snapshot.move }} / {{ snapshot.max_move }}</dd>
+    <dt>position</dt><dd>{{ snapshot.position }}</dd>
+  </dl>
+</section>
+
+<section class="state-section">
+  <h4>Бонусы</h4>
+  <dl class="state-grid">
+    <dt>spellpower +</dt><dd>{{ snapshot.spellpower_add_pct }}%</dd>
+    <dt>physdam +</dt><dd>{{ snapshot.physdam_add_pct }}%</dd>
+  </dl>
+</section>
+
+{% if snapshot.get('feats_list') %}
+<section class="state-section">
+  <h4>Способности ({{ snapshot.feats_list|length }})</h4>
+  <ul class="feat-list">
+    {% for f in snapshot.feats_list %}<li>{{ f }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="state-section">
+  <h4>Аффекты ({{ snapshot.affects_count }})</h4>
+  {% if snapshot.get('affects_list') %}
+  <ul class="aff-list">
+    {% for a in snapshot.affects_list %}<li>{{ a }}</li>{% endfor %}
+  </ul>
+  {% else %}
+  <ul class="aff-list">
+    {% if snapshot.aff_silence %}<li class="active">silence</li>{% endif %}
+    {% if snapshot.aff_charmed %}<li class="active">charmed</li>{% endif %}
+    {% if snapshot.aff_sleep %}<li class="active">sleep</li>{% endif %}
+    {% if not snapshot.aff_silence and not snapshot.aff_charmed and not snapshot.aff_sleep %}
+    <li class="empty">пусто</li>
+    {% endif %}
+  </ul>
+  {% endif %}
+</section>
 {% else %}
 <p class="empty">Нет данных для роли «{{ role }}» на этот момент.</p>
 {% endif %}

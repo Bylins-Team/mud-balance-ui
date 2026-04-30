@@ -71,8 +71,11 @@ COPY app /app/app
 COPY templates /app/templates
 COPY static /app/static
 
-# Vendor htmx (not committed to the repo to keep it lean).
-RUN curl -fsSL -o /app/static/htmx.min.js https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js
+# Vendor third-party JS/CSS (not committed to the repo to keep it lean).
+RUN curl -fsSL -o /app/static/htmx.min.js https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js && \
+    curl -fsSL -o /app/static/highlight.min.js https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/highlight.min.js && \
+    curl -fsSL -o /app/static/highlight-yaml.min.js https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/languages/yaml.min.js && \
+    curl -fsSL -o /app/static/highlight.min.css https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.10.0/styles/github-dark.min.css
 
 RUN pip install --no-cache-dir -e ".[prod]"
 

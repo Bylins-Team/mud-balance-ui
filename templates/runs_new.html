@@ -1,42 +1,243 @@
 {% extends "base.html" %}
 {% block title %}Новый прогон — mud-balance-ui{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='highlight.min.css') }}">
+{% endblock %}
 {% block content %}
-<h1>Новый прогон</h1>
+<header class="run-header">
+  <h1>Новый прогон</h1>
+</header>
 
-<form method="post" action="{{ url_for('ui.runs_create') }}" class="scenario-form">
-  <p class="hint">
-    YAML-сценарий в формате mud-sim. Поле <code>output</code> игнорируется
-    (UI всегда подставляет свой путь). Запуск блокирует обработчик
-    до завершения симулятора (timeout 120 сек по умолчанию).
-  </p>
+<form method="post" action="{{ url_for('ui.runs_create') }}" id="scenario-form" class="scenario-form">
 
-  <label for="scenario">Сценарий</label>
-  <textarea name="scenario" id="scenario" rows="20" spellcheck="false">{{ default_yaml }}</textarea>
+  <section class="scenario-fields">
+    <h3>Структурированные параметры</h3>
+
+    <fieldset>
+      <legend>Прогон</legend>
+      <div class="field-row">
+        <label for="seed">seed</label>
+        <input type="number" id="seed" name="_seed" value="42" min="0">
+      </div>
+      <div class="field-row">
+        <label for="rounds">раундов</label>
+        <input type="number" id="rounds" name="_rounds" value="50" min="1" max="10000">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Атакующий</legend>
+      <div class="field-row">
+        <label>тип</label>
+        <div class="radio-group">
+          <label><input type="radio" name="_atk_type" value="player" checked> player</label>
+          <label><input type="radio" name="_atk_type" value="mob"> mob</label>
+        </div>
+      </div>
+      <div class="field-row" data-show-when="_atk_type=player">
+        <label for="atk_class">класс</label>
+        <select id="atk_class" name="_atk_class">
+          <option value="bogatyr" selected>богатырь (bogatyr)</option>
+          <option value="naemnik">наёмник (naemnik)</option>
+          <option value="kudesnik">кудесник (kudesnik)</option>
+          <option value="koldun">колдун (koldun)</option>
+          <option value="lekar">лекарь (lekar)</option>
+          <option value="ohotnik">охотник (ohotnik)</option>
+          <option value="volkhv">волхв (volkhv)</option>
+          <option value="druzhinnik">дружинник (druzhinnik)</option>
+          <option value="kupets">купец (kupets)</option>
+          <option value="chernoknizhnik">чернокнижник (chernoknizhnik)</option>
+          <option value="vityaz">витязь (vityaz)</option>
+          <option value="tat">тать (tat)</option>
+          <option value="kuznets">кузнец (kuznets)</option>
+          <option value="volshebnik">волшебник (volshebnik)</option>
+        </select>
+      </div>
+      <div class="field-row" data-show-when="_atk_type=player">
+        <label for="atk_level">уровень</label>
+        <input type="number" id="atk_level" name="_atk_level" value="30" min="1" max="34">
+      </div>
+      <div class="field-row" data-show-when="_atk_type=mob">
+        <label for="atk_vnum">vnum</label>
+        <input type="number" id="atk_vnum" name="_atk_vnum" value="100" min="1">
+      </div>
+      <div class="field-row">
+        <label for="atk_max_hit">max_hit</label>
+        <input type="number" id="atk_max_hit" name="_atk_max_hit" min="1" placeholder="по умолчанию">
+      </div>
+      <div class="stat-grid" data-show-when="_atk_type=player">
+        <label>str <input type="number" name="_atk_str" min="1" max="90" placeholder="25"></label>
+        <label>dex <input type="number" name="_atk_dex" min="1" max="90" placeholder="25"></label>
+        <label>con <input type="number" name="_atk_con" min="1" max="90" placeholder="25"></label>
+        <label>int <input type="number" name="_atk_int" min="1" max="90" placeholder="25"></label>
+        <label>wis <input type="number" name="_atk_wis" min="1" max="90" placeholder="25"></label>
+        <label>cha <input type="number" name="_atk_cha" min="1" max="90" placeholder="25"></label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Жертва</legend>
+      <div class="field-row">
+        <label>тип</label>
+        <div class="radio-group">
+          <label><input type="radio" name="_vic_type" value="player"> player</label>
+          <label><input type="radio" name="_vic_type" value="mob" checked> mob</label>
+        </div>
+      </div>
+      <div class="field-row" data-show-when="_vic_type=mob">
+        <label for="vic_vnum">vnum</label>
+        <input type="number" id="vic_vnum" name="_vic_vnum" value="102" min="1">
+      </div>
+      <div class="field-row" data-show-when="_vic_type=player">
+        <label for="vic_class">класс</label>
+        <select id="vic_class" name="_vic_class">
+          <option value="bogatyr">богатырь</option>
+          <option value="lekar">лекарь</option>
+          <option value="naemnik">наёмник</option>
+          <option value="koldun">колдун</option>
+        </select>
+      </div>
+      <div class="field-row" data-show-when="_vic_type=player">
+        <label for="vic_level">уровень</label>
+        <input type="number" id="vic_level" name="_vic_level" value="30" min="1" max="34">
+      </div>
+      <div class="field-row">
+        <label for="vic_max_hit">max_hit</label>
+        <input type="number" id="vic_max_hit" name="_vic_max_hit" min="1" placeholder="по умолчанию">
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Действие атакующего</legend>
+      <div class="field-row">
+        <label>тип</label>
+        <div class="radio-group">
+          <label><input type="radio" name="_action" value="melee" checked> melee</label>
+          <label><input type="radio" name="_action" value="cast"> cast</label>
+        </div>
+      </div>
+      <div class="field-row" data-show-when="_action=cast">
+        <label for="spell">заклинание</label>
+        <input type="text" id="spell" name="_spell" placeholder="шаровая молния" autocomplete="off">
+      </div>
+    </fieldset>
+  </section>
+
+  <aside class="scenario-yaml">
+    <div class="panel-header">
+      <h3>YAML сценария</h3>
+      <button type="button" id="regen-yaml" class="secondary">↻ из формы</button>
+    </div>
+    <textarea name="scenario" id="scenario-textarea" class="scenario-yaml-edit" spellcheck="false"></textarea>
+    <pre class="scenario-yaml-pre"><code id="scenario-highlight" class="language-yaml"></code></pre>
+  </aside>
 
   <div class="form-actions">
     <button type="submit" class="primary">Запустить</button>
-    <a href="{{ url_for('ui.runs_list') }}">Отмена</a>
+    <a href="{{ url_for('ui.runs_list') }}" class="secondary">Отмена</a>
+    <span class="empty" id="form-hint">правка YAML вручную перекроет поля формы</span>
   </div>
 </form>
 
-<details class="cheatsheet">
-  <summary>Шпаргалка по полям</summary>
-<pre>
-seed: 42                    # для воспроизводимости
-rounds: 50                  # сколько pulse_violence прокрутить
-attacker:
-  type: player              # или mob
-  class: bogatyr            # см. список алиасов в src/simulator/README.md
-  level: 30
-  stats: { wis: 80 }        # опц. перебивка статов
-  pets: [{ vnum: 4001 }]    # опц. чармисы / нежить
-  inventory: [111, 207]     # опц. стартовая экипировка по vnum
-victim:
-  type: mob
-  vnum: 102
-action:
-  type: cast                # или melee (по умолчанию)
-  spell: "&Y&qшаровая молния&n"
-</pre>
-</details>
+<script src="{{ url_for('static', filename='highlight.min.js') }}"></script>
+<script src="{{ url_for('static', filename='highlight-yaml.min.js') }}"></script>
+<script>
+(function () {
+  const form = document.getElementById('scenario-form');
+  const ta = document.getElementById('scenario-textarea');
+  const codeEl = document.getElementById('scenario-highlight');
+  let userEdited = false;
+
+  function valOrNone(name) {
+    const el = form.querySelector(`[name="${name}"]`);
+    return el && el.value !== '' ? el.value : null;
+  }
+  function radio(name) {
+    const el = form.querySelector(`[name="${name}"]:checked`);
+    return el ? el.value : null;
+  }
+
+  function buildParticipant(prefix) {
+    const type = radio(`_${prefix}_type`);
+    const lines = [`  type: ${type}`];
+    if (type === 'player') {
+      lines.push(`  class: ${valOrNone(`_${prefix}_class`)}`);
+      lines.push(`  level: ${valOrNone(`_${prefix}_level`)}`);
+    } else {
+      lines.push(`  vnum: ${valOrNone(`_${prefix}_vnum`)}`);
+    }
+    const stats = [];
+    for (const s of ['str', 'dex', 'con', 'int', 'wis', 'cha']) {
+      const v = valOrNone(`_${prefix}_${s}`);
+      if (v !== null) stats.push(`    ${s}: ${v}`);
+    }
+    const mh = valOrNone(`_${prefix}_max_hit`);
+    if (mh !== null) stats.push(`    max_hit: ${mh}`);
+    if (stats.length) {
+      lines.push('  stats:');
+      lines.push(...stats);
+    }
+    return lines.join('\n');
+  }
+
+  function buildYaml() {
+    const parts = [
+      `seed: ${valOrNone('_seed') || 0}`,
+      `rounds: ${valOrNone('_rounds') || 50}`,
+      `attacker:`,
+      buildParticipant('atk'),
+      `victim:`,
+      buildParticipant('vic'),
+    ];
+    const action = radio('_action');
+    if (action === 'cast') {
+      const spell = valOrNone('_spell') || '';
+      parts.push(`action:`);
+      parts.push(`  type: cast`);
+      parts.push(`  spell: ${spell}`);
+    }
+    return parts.join('\n') + '\n';
+  }
+
+  function updateVisibility() {
+    form.querySelectorAll('[data-show-when]').forEach(el => {
+      const [k, v] = el.dataset.showWhen.split('=');
+      el.style.display = (radio(k) === v) ? '' : 'none';
+    });
+  }
+
+  function highlight() {
+    if (!window.hljs) return;
+    codeEl.textContent = ta.value;
+    delete codeEl.dataset.highlighted;
+    hljs.highlightElement(codeEl);
+  }
+
+  function regenerate() {
+    ta.value = buildYaml();
+    userEdited = false;
+    highlight();
+  }
+
+  // Auto-update YAML on form changes UNLESS the user has edited the textarea.
+  form.addEventListener('input', (e) => {
+    if (e.target === ta) {
+      userEdited = true;
+      highlight();
+      return;
+    }
+    updateVisibility();
+    if (!userEdited) regenerate();
+  });
+  form.addEventListener('change', (e) => {
+    if (e.target.matches('input[type=radio]')) updateVisibility();
+    if (!userEdited) regenerate();
+  });
+
+  document.getElementById('regen-yaml').addEventListener('click', regenerate);
+
+  updateVisibility();
+  regenerate();
+})();
+</script>
 {% endblock %}
