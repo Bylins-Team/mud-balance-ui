@@ -206,11 +206,23 @@ def search_mobs(world_dir: Path, query: str, limit: int = 25) -> list[Mob]:
     return [m for m in load_mobs(world_dir) if m.matches(query)][:limit]
 
 
+# Types that the engine actually equips at the wear-flag slot. Other kHands
+# items like kWorm ("заточка / закалка" -- unimplemented in the enum, used as
+# crafting-only) carry the kHands flag but EquipObj rejects them via
+# invalid_no_class. We skip them in the autocomplete to spare users from
+# selecting kit that just falls into inventory.
+WEARABLE_OBJ_TYPES = {
+    "kLightSource", "kWeapon", "kArmor", "kContainer",
+    "kLightArmor", "kMediumArmor", "kHeavyArmor",
+}
+
+
 def load_objects(world_dir: Path) -> list[Obj]:
     """Walk world/zones/*/objects/*.yaml; index vnum + name + wear_flags.
 
     Same KOI8-R yaml format as mobs. Items without a wear_flags entry, or
-    with only `kTake`, are skipped -- we only care about wearable kit.
+    with only `kTake`, or whose `type` is not in WEARABLE_OBJ_TYPES are
+    skipped -- we only care about kit the engine will actually equip.
     """
     global _objs_cache
     if _objs_cache is not None:
@@ -251,6 +263,8 @@ def load_objects(world_dir: Path) -> list[Obj]:
                 else:
                     name = "?"
                 obj_type = entry.get("type") if isinstance(entry.get("type"), str) else "?"
+                if obj_type not in WEARABLE_OBJ_TYPES:
+                    continue
                 seen.add(vnum)
                 out.append(Obj(
                     vnum=vnum,
