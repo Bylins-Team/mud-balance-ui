@@ -1,5 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ meta.get('attacker', '?') }} vs {{ meta.get('victim', '?') }} — mud-balance-ui{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='highlight.min.css') }}">
+{% endblock %}
 {% block content %}
 <header class="run-header">
   <div class="run-header-main">
@@ -24,7 +27,7 @@
 
 <details class="scenario-source">
   <summary>YAML сценария</summary>
-  <pre>{{ meta.get('scenario_yaml', '') }}</pre>
+  <pre><code class="language-yaml">{{ meta.get('scenario_yaml', '') }}</code></pre>
 </details>
 
 <section class="viewer"
@@ -80,8 +83,14 @@
   </footer>
 </section>
 
+<script src="{{ url_for('static', filename='highlight.min.js') }}"></script>
+<script src="{{ url_for('static', filename='highlight-yaml.min.js') }}"></script>
 <script>
 (function () {
+  // Syntax-highlight the read-only scenario YAML block.
+  if (window.hljs) {
+    document.querySelectorAll('pre code.language-yaml').forEach(el => hljs.highlightElement(el));
+  }
   const viewer = document.querySelector('.viewer');
   const slider = document.getElementById('round-slider');
   const display = document.getElementById('round-display');
@@ -97,9 +106,14 @@
   const PLAY_INTERVAL_MS = 600;
   let playTimer = null;
 
-  async function loadFragment(url, target) {
+  async function loadFragment(url, target, autoscroll) {
     const r = await fetch(url, {credentials: 'include'});
     target.innerHTML = await r.text();
+    if (autoscroll) {
+      // Scroll to the bottom so the latest entry is visible. Done after
+      // innerHTML so the layout has settled.
+      target.scrollTop = target.scrollHeight;
+    }
   }
 
   function refresh() {
@@ -108,9 +122,9 @@
     const label = (r === '-1') ? 'старт' : r;
     display.innerHTML = `round <strong>${label}</strong> / ${maxRound}`;
     const url = `/runs/${runId}/api`;
-    loadFragment(`${url}/state?round=${r}&role=${role}`, document.getElementById('state-panel'));
-    loadFragment(`${url}/log?round=${r}`, document.getElementById('log-panel'));
-    loadFragment(`${url}/screen?round=${r}&role=${role}`, document.getElementById('screen-panel'));
+    loadFragment(`${url}/state?round=${r}&role=${role}`, document.getElementById('state-panel'), false);
+    loadFragment(`${url}/log?round=${r}`,               document.getElementById('log-panel'),   true);
+    loadFragment(`${url}/screen?round=${r}&role=${role}`, document.getElementById('screen-panel'), true);
     history.replaceState({}, '', `?round=${r}&role=${role}`);
   }
 

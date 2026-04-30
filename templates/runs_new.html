@@ -77,6 +77,14 @@
         <label>wis <input type="number" name="_atk_wis" min="1" max="90" placeholder="25"></label>
         <label>cha <input type="number" name="_atk_cha" min="1" max="90" placeholder="25"></label>
       </div>
+      <div class="field-row">
+        <label for="atk_inventory">экипировка</label>
+        <input type="text" id="atk_inventory" name="_atk_inventory" placeholder="111, 207 (через запятую)" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <label for="atk_affects">аффекты</label>
+        <input type="text" id="atk_affects" name="_atk_affects" placeholder="защита, доблесть (через запятую)" autocomplete="off">
+      </div>
     </fieldset>
 
     <fieldset class="participant" data-prefix="vic">
@@ -113,6 +121,14 @@
         <label for="vic_max_hit">max_hit</label>
         <input type="number" id="vic_max_hit" name="_vic_max_hit" min="1" placeholder="по умолчанию">
       </div>
+      <div class="field-row">
+        <label for="vic_inventory">экипировка</label>
+        <input type="text" id="vic_inventory" name="_vic_inventory" placeholder="111, 207 (через запятую)" autocomplete="off">
+      </div>
+      <div class="field-row">
+        <label for="vic_affects">аффекты</label>
+        <input type="text" id="vic_affects" name="_vic_affects" placeholder="защита, доблесть" autocomplete="off">
+      </div>
     </fieldset>
 
     <fieldset>
@@ -139,6 +155,7 @@
     <div class="panel-header">
       <h3>YAML сценария</h3>
       <div class="yaml-actions">
+        <button type="button" id="yaml-toggle-preview" class="secondary" title="переключить подсветку синтаксиса (read-only)">👁</button>
         <button type="button" id="yaml-from-form" class="secondary" title="перегенерировать YAML из полей формы">↻ из формы</button>
         <button type="button" id="yaml-to-form" class="secondary" title="распарсить YAML обратно в поля формы">→ в форму</button>
       </div>
@@ -183,6 +200,12 @@
   }
 
   // -------- YAML <- form --------
+  function csvList(name) {
+    const v = valOrNone(name);
+    if (!v) return [];
+    return v.split(',').map(s => s.trim()).filter(s => s.length > 0);
+  }
+
   function buildParticipant(prefix) {
     const type = radio(`_${prefix}_type`);
     const lines = [`  type: ${type}`];
@@ -202,6 +225,13 @@
     if (stats.length) {
       lines.push('  stats:');
       lines.push(...stats);
+    }
+    const inv = csvList(`_${prefix}_inventory`).map(Number).filter(n => !isNaN(n));
+    if (inv.length) lines.push(`  inventory: [${inv.join(', ')}]`);
+    const affs = csvList(`_${prefix}_affects`);
+    if (affs.length) {
+      lines.push('  affects:');
+      for (const a of affs) lines.push(`    - { spell: ${a} }`);
     }
     return lines.join('\n');
   }
@@ -237,6 +267,13 @@
     const stats = p.stats || {};
     for (const s of ['str', 'dex', 'con', 'int', 'wis', 'cha', 'max_hit']) {
       setVal(`_${prefix}_${s}`, stats[s]);
+    }
+    if (Array.isArray(p.inventory)) {
+      setVal(`_${prefix}_inventory`, p.inventory.join(', '));
+    }
+    if (Array.isArray(p.affects)) {
+      const names = p.affects.map(a => (typeof a === 'object' && a.spell) ? a.spell : '').filter(Boolean);
+      setVal(`_${prefix}_affects`, names.join(', '));
     }
   }
 
@@ -390,6 +427,27 @@
 
   document.getElementById('yaml-from-form').addEventListener('click', regenerate);
   document.getElementById('yaml-to-form').addEventListener('click', parseYamlToForm);
+
+  // Preview mode: highlighted, read-only. Toggle by button or by clicking
+  // the preview itself to switch back to edit.
+  const yamlPanel = document.querySelector('.scenario-yaml');
+  const toggleBtn = document.getElementById('yaml-toggle-preview');
+  toggleBtn.addEventListener('click', () => {
+    yamlPanel.classList.toggle('preview-mode');
+    if (yamlPanel.classList.contains('preview-mode')) {
+      highlight();
+      toggleBtn.textContent = '✎';
+      toggleBtn.title = 'вернуться к редактированию';
+    } else {
+      toggleBtn.textContent = '👁';
+      toggleBtn.title = 'переключить подсветку синтаксиса (read-only)';
+    }
+  });
+  document.querySelector('.scenario-yaml-pre').addEventListener('click', () => {
+    yamlPanel.classList.remove('preview-mode');
+    toggleBtn.textContent = '👁';
+    ta.focus();
+  });
 
   updateAutocompleteFromHidden();
   updateVisibility();
