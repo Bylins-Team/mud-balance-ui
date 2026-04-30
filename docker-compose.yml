@@ -19,12 +19,13 @@ services:
     volumes:
       # Persistent run history. Survives container rebuilds.
       - ./runs:/data/runs
-      # Optional: mount your own prepared world read-only to override the
-      # default small/ baked into the image. Comment out to use the default.
-      # - ./world:/data/world:ro
+      # Big world (production-ish snapshot from ~/worlds/world.tgz),
+      # unpacked + converted to YAML once on the host. RO mount so
+      # mud-sim can't accidentally write to the world tree.
+      - ./world:/data/world:ro
     environment:
       MUD_SIM_BIN: /opt/mud-sim
-      MUD_SIM_WORLD_DIR: /opt/small
+      MUD_SIM_WORLD_DIR: /data/world
       RUNS_DIR: /data/runs
       MUD_SIM_TIMEOUT_S: "120"
     networks:

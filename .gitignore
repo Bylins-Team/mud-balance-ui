@@ -16,6 +16,10 @@ venv/
 # Run artifacts (mounted as volume in Docker)
 runs/
 
+# Big-world snapshot (~900 MB unpacked + converted) -- bind-mounted at
+# runtime from ~/worlds/world.tgz; not tracked in git.
+world/
+
 # Docker build cache
 .docker-build/
 
