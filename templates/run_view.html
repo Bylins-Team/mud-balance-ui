@@ -34,7 +34,7 @@
   <summary>Аналитика</summary>
   <div class="analytics-grid">
     <div class="chart-card">
-      <h3>HP жертвы по раундам</h3>
+      <h3>Урон, нанесённый жертве</h3>
       <div class="chart-wrap"><canvas id="chart-hp"></canvas></div>
     </div>
     <div class="chart-card">
@@ -123,42 +123,98 @@
     if (!r.ok) return;
     const data = await r.json();
     if (!data.labels.length) return;
-    const accent = '#ee854a', good = '#6acc64', info = '#5fadea', dim = '#828a96';
+    const accent = '#ee854a', good = '#6acc64', info = '#5fadea';
     const grid = 'rgba(255,255,255,0.06)';
     const tickColor = '#828a96';
+    // Shared tooltip / hover: показывать значения ВСЕХ datasets на одном
+    // X-делении при наведении куда угодно по горизонтали (а не только
+    // если курсор попал в саму точку/бар).
+    const sharedInteraction = { mode: 'index', intersect: false };
     const common = {
       responsive: true, maintainAspectRatio: false,
-      plugins: { legend: { labels: { color: '#d4d8df' } } },
+      interaction: sharedInteraction,
+      plugins: {
+        legend: { labels: { color: '#d4d8df' } },
+        tooltip: { ...sharedInteraction },
+      },
       scales: {
-        x: { ticks: { color: tickColor }, grid: { color: grid } },
+        x: { ticks: { color: tickColor, maxRotation: 0, autoSkip: true }, grid: { color: grid } },
         y: { ticks: { color: tickColor }, grid: { color: grid }, beginAtZero: true },
       },
     };
+
+    // ----- 1. Урон, понесённый жертвой (max - hp).
+    // Голый HP бесполезен когда max = 5e8: изменения в тысячи теряются.
+    // Считаем damage_taken = max_hp - hp_victim_after_round.
+    const hpMax = data.hp_victim.length ? Math.max(...data.hp_victim) : 0;
+    const damageTaken = data.hp_victim.map(hp => hpMax - hp);
     new Chart(document.getElementById('chart-hp'), {
       type: 'line',
       data: { labels: data.labels, datasets: [{
-        label: 'HP жертвы', data: data.hp_victim, borderColor: info,
-        backgroundColor: 'rgba(95,173,234,0.15)', fill: true, tension: 0.2,
+        label: 'урон, нанесённый жертве', data: damageTaken,
+        borderColor: info, backgroundColor: 'rgba(95,173,234,0.15)',
+        fill: true, tension: 0.2, pointRadius: 0, pointHoverRadius: 4,
       }]},
       options: common,
     });
+
+    // ----- 2. Breakdown: stacked area для длинных прогонов, иначе bar.
+    // На 500 раундах столбики превращаются в сплошную кашу пиксель в
+    // ширину; area сглаживает и сразу видна тенденция.
+    const useArea = data.labels.length > 60;
     new Chart(document.getElementById('chart-breakdown'), {
-      type: 'bar',
+      type: useArea ? 'line' : 'bar',
       data: { labels: data.labels, datasets: [
-        { label: 'master melee', data: data.damage_breakdown.master_melee, backgroundColor: info },
-        { label: 'master spell', data: data.damage_breakdown.master_spell, backgroundColor: accent },
-        { label: 'pets',         data: data.damage_breakdown.pets,         backgroundColor: good },
+        {
+          label: 'melee хозяина', data: data.damage_breakdown.master_melee,
+          backgroundColor: useArea ? 'rgba(95,173,234,0.55)' : info,
+          borderColor: info,
+          fill: useArea ? 'origin' : false,
+          tension: 0.2, pointRadius: 0,
+          stack: 'd',
+        },
+        {
+          label: 'spell хозяина', data: data.damage_breakdown.master_spell,
+          backgroundColor: useArea ? 'rgba(238,133,74,0.55)' : accent,
+          borderColor: accent,
+          fill: useArea ? '-1' : false,
+          tension: 0.2, pointRadius: 0,
+          stack: 'd',
+        },
+        {
+          label: 'pets', data: data.damage_breakdown.pets,
+          backgroundColor: useArea ? 'rgba(106,204,100,0.55)' : good,
+          borderColor: good,
+          fill: useArea ? '-1' : false,
+          tension: 0.2, pointRadius: 0,
+          stack: 'd',
+        },
       ]},
-      options: { ...common, scales: {
-        x: { ...common.scales.x, stacked: true },
-        y: { ...common.scales.y, stacked: true },
-      }},
+      options: { ...common,
+        plugins: {
+          ...common.plugins,
+          tooltip: {
+            ...sharedInteraction,
+            // Сводный итог в footer'е tooltip'а: total = melee + spell + pets.
+            callbacks: {
+              footer: (items) => 'итого: ' + items.reduce((s, it) => s + (it.parsed.y || 0), 0),
+            },
+          },
+        },
+        scales: {
+          x: { ...common.scales.x, stacked: true },
+          y: { ...common.scales.y, stacked: true },
+        },
+      },
     });
+
+    // ----- 3. Кумулятивный урон.
     new Chart(document.getElementById('chart-cumulative'), {
       type: 'line',
       data: { labels: data.labels, datasets: [{
-        label: 'суммарный урон', data: data.cumulative, borderColor: accent,
-        backgroundColor: 'rgba(238,133,74,0.18)', fill: true, tension: 0.1,
+        label: 'суммарный урон', data: data.cumulative,
+        borderColor: accent, backgroundColor: 'rgba(238,133,74,0.18)',
+        fill: true, tension: 0.1, pointRadius: 0, pointHoverRadius: 4,
       }]},
       options: common,
     });
