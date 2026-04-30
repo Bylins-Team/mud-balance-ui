@@ -43,25 +43,29 @@
         </select>
       </div>
       <div id="state-panel" class="panel-body state-panel">
-        <p class="empty">Загрузка…</p>
+        <p class="empty">…</p>
       </div>
     </aside>
 
     <section class="viewer-log panel">
       <div class="panel-header"><h2>Combat log</h2></div>
       <div id="log-panel" class="panel-body log-panel">
-        <p class="empty">Загрузка…</p>
+        <p class="empty">…</p>
       </div>
     </section>
 
     <section class="viewer-screen panel">
       <div class="panel-header"><h2>Screen output</h2></div>
-      <pre id="screen-panel" class="panel-body screen-panel"><span class="empty">Загрузка…</span></pre>
+      <pre id="screen-panel" class="panel-body screen-panel"><span class="empty">…</span></pre>
     </section>
   </div>
 
   <footer class="viewer-timeline">
-    <button id="btn-prev" type="button" class="round-step" aria-label="предыдущий раунд">‹</button>
+    <button id="btn-first" type="button" class="round-step" aria-label="к началу" title="к началу (Home)">⏮</button>
+    <button id="btn-prev"  type="button" class="round-step" aria-label="предыдущий раунд" title="предыдущий (←)">‹</button>
+    <button id="btn-play"  type="button" class="round-step round-play" aria-label="воспроизвести" title="play / пауза (Space)">▶</button>
+    <button id="btn-next"  type="button" class="round-step" aria-label="следующий раунд" title="следующий (→)">›</button>
+    <button id="btn-last"  type="button" class="round-step" aria-label="к концу" title="к концу (End)">⏭</button>
     <input type="range" id="round-slider"
            min="-1" max="{{ max_round }}" step="1"
            value="{{ initial_round }}"
@@ -72,7 +76,6 @@
       <option value="{{ n }}" label="{{ n }}">
       {% endfor %}
     </datalist>
-    <button id="btn-next" type="button" class="round-step" aria-label="следующий раунд">›</button>
     <span id="round-display">round <strong>{{ initial_round }}</strong> / {{ max_round }}</span>
   </footer>
 </section>
@@ -83,10 +86,21 @@
   const slider = document.getElementById('round-slider');
   const display = document.getElementById('round-display');
   const roleSelect = document.getElementById('role-select');
+  const btnFirst = document.getElementById('btn-first');
   const btnPrev = document.getElementById('btn-prev');
+  const btnPlay = document.getElementById('btn-play');
   const btnNext = document.getElementById('btn-next');
+  const btnLast = document.getElementById('btn-last');
   const runId = viewer.dataset.runId;
   const maxRound = parseInt(viewer.dataset.maxRound, 10);
+  const minRound = parseInt(slider.min, 10);
+  const PLAY_INTERVAL_MS = 600;
+  let playTimer = null;
+
+  async function loadFragment(url, target) {
+    const r = await fetch(url, {credentials: 'include'});
+    target.innerHTML = await r.text();
+  }
 
   function refresh() {
     const r = slider.value;
@@ -94,42 +108,51 @@
     const label = (r === '-1') ? 'старт' : r;
     display.innerHTML = `round <strong>${label}</strong> / ${maxRound}`;
     const url = `/runs/${runId}/api`;
-    if (window.htmx) {
-      htmx.ajax('GET', `${url}/state?round=${r}&role=${role}`, '#state-panel');
-      htmx.ajax('GET', `${url}/log?round=${r}`, '#log-panel');
-      htmx.ajax('GET', `${url}/screen?round=${r}&role=${role}`, '#screen-panel');
-    } else {
-      // No-HTMX fallback: plain fetch + innerHTML.
-      fetch(`${url}/state?round=${r}&role=${role}`).then(x => x.text()).then(t => document.getElementById('state-panel').innerHTML = t);
-      fetch(`${url}/log?round=${r}`).then(x => x.text()).then(t => document.getElementById('log-panel').innerHTML = t);
-      fetch(`${url}/screen?round=${r}&role=${role}`).then(x => x.text()).then(t => document.getElementById('screen-panel').innerHTML = t);
-    }
+    loadFragment(`${url}/state?round=${r}&role=${role}`, document.getElementById('state-panel'));
+    loadFragment(`${url}/log?round=${r}`, document.getElementById('log-panel'));
+    loadFragment(`${url}/screen?round=${r}&role=${role}`, document.getElementById('screen-panel'));
     history.replaceState({}, '', `?round=${r}&role=${role}`);
   }
 
-  btnPrev.addEventListener('click', () => {
-    const v = parseInt(slider.value, 10);
-    if (v > parseInt(slider.min, 10)) { slider.value = v - 1; refresh(); }
-  });
-  btnNext.addEventListener('click', () => {
-    const v = parseInt(slider.value, 10);
-    if (v < parseInt(slider.max, 10)) { slider.value = v + 1; refresh(); }
-  });
-  slider.addEventListener('input', refresh);
+  function setRound(r) {
+    slider.value = String(Math.max(minRound, Math.min(maxRound, r)));
+    refresh();
+  }
+
+  function stopPlay() {
+    if (playTimer) { clearInterval(playTimer); playTimer = null; }
+    btnPlay.textContent = '▶';
+    btnPlay.classList.remove('playing');
+  }
+  function startPlay() {
+    if (parseInt(slider.value, 10) >= maxRound) setRound(minRound);
+    btnPlay.textContent = '⏸';
+    btnPlay.classList.add('playing');
+    playTimer = setInterval(() => {
+      const v = parseInt(slider.value, 10);
+      if (v >= maxRound) { stopPlay(); return; }
+      setRound(v + 1);
+    }, PLAY_INTERVAL_MS);
+  }
+
+  btnFirst.addEventListener('click', () => { stopPlay(); setRound(minRound); });
+  btnLast .addEventListener('click', () => { stopPlay(); setRound(maxRound); });
+  btnPrev .addEventListener('click', () => { stopPlay(); setRound(parseInt(slider.value,10) - 1); });
+  btnNext .addEventListener('click', () => { stopPlay(); setRound(parseInt(slider.value,10) + 1); });
+  btnPlay .addEventListener('click', () => { playTimer ? stopPlay() : startPlay(); });
+  slider  .addEventListener('input', () => { stopPlay(); refresh(); });
   roleSelect.addEventListener('change', refresh);
-  // Keyboard: arrow keys advance the round when slider isn't focused.
+
   document.addEventListener('keydown', (e) => {
     if (e.target.matches('input,textarea,select')) return;
-    if (e.key === 'ArrowLeft')  btnPrev.click();
-    if (e.key === 'ArrowRight') btnNext.click();
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); btnPrev.click(); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); btnNext.click(); }
+    if (e.key === 'Home')       { e.preventDefault(); btnFirst.click(); }
+    if (e.key === 'End')        { e.preventDefault(); btnLast.click(); }
+    if (e.key === ' ')          { e.preventDefault(); btnPlay.click(); }
   });
 
-  // Initial load. Wait for HTMX if present, otherwise fire immediately.
-  if (window.htmx) {
-    refresh();
-  } else {
-    document.addEventListener('DOMContentLoaded', refresh);
-  }
+  refresh();
 })();
 </script>
 {% endblock %}

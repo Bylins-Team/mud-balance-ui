@@ -11,7 +11,7 @@
 <form method="post" action="{{ url_for('ui.runs_create') }}" id="scenario-form" class="scenario-form">
 
   <section class="scenario-fields">
-    <h3>Структурированные параметры</h3>
+    <h3>Параметры</h3>
 
     <fieldset>
       <legend>Прогон</legend>
@@ -25,7 +25,7 @@
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="participant" data-prefix="atk">
       <legend>Атакующий</legend>
       <div class="field-row">
         <label>тип</label>
@@ -58,8 +58,12 @@
         <input type="number" id="atk_level" name="_atk_level" value="30" min="1" max="34">
       </div>
       <div class="field-row" data-show-when="_atk_type=mob">
-        <label for="atk_vnum">vnum</label>
-        <input type="number" id="atk_vnum" name="_atk_vnum" value="100" min="1">
+        <label>моб</label>
+        <div class="autocomplete" data-autocomplete-source="/api/mobs" data-autocomplete-target="_atk_vnum">
+          <input type="text" class="autocomplete-input" placeholder="vnum или имя…" autocomplete="off">
+          <input type="hidden" name="_atk_vnum" id="atk_vnum">
+          <ul class="autocomplete-list"></ul>
+        </div>
       </div>
       <div class="field-row">
         <label for="atk_max_hit">max_hit</label>
@@ -75,7 +79,7 @@
       </div>
     </fieldset>
 
-    <fieldset>
+    <fieldset class="participant" data-prefix="vic">
       <legend>Жертва</legend>
       <div class="field-row">
         <label>тип</label>
@@ -85,8 +89,12 @@
         </div>
       </div>
       <div class="field-row" data-show-when="_vic_type=mob">
-        <label for="vic_vnum">vnum</label>
-        <input type="number" id="vic_vnum" name="_vic_vnum" value="102" min="1">
+        <label>моб</label>
+        <div class="autocomplete" data-autocomplete-source="/api/mobs" data-autocomplete-target="_vic_vnum">
+          <input type="text" class="autocomplete-input" placeholder="vnum или имя…" autocomplete="off">
+          <input type="hidden" name="_vic_vnum" id="vic_vnum" value="102">
+          <ul class="autocomplete-list"></ul>
+        </div>
       </div>
       <div class="field-row" data-show-when="_vic_type=player">
         <label for="vic_class">класс</label>
@@ -117,8 +125,12 @@
         </div>
       </div>
       <div class="field-row" data-show-when="_action=cast">
-        <label for="spell">заклинание</label>
-        <input type="text" id="spell" name="_spell" placeholder="шаровая молния" autocomplete="off">
+        <label>заклинание</label>
+        <div class="autocomplete" data-autocomplete-source="/api/spells" data-autocomplete-target="_spell">
+          <input type="text" class="autocomplete-input" placeholder="название…" autocomplete="off">
+          <input type="hidden" name="_spell" id="spell">
+          <ul class="autocomplete-list"></ul>
+        </div>
       </div>
     </fieldset>
   </section>
@@ -126,7 +138,10 @@
   <aside class="scenario-yaml">
     <div class="panel-header">
       <h3>YAML сценария</h3>
-      <button type="button" id="regen-yaml" class="secondary">↻ из формы</button>
+      <div class="yaml-actions">
+        <button type="button" id="yaml-from-form" class="secondary" title="перегенерировать YAML из полей формы">↻ из формы</button>
+        <button type="button" id="yaml-to-form" class="secondary" title="распарсить YAML обратно в поля формы">→ в форму</button>
+      </div>
     </div>
     <textarea name="scenario" id="scenario-textarea" class="scenario-yaml-edit" spellcheck="false"></textarea>
     <pre class="scenario-yaml-pre"><code id="scenario-highlight" class="language-yaml"></code></pre>
@@ -135,18 +150,20 @@
   <div class="form-actions">
     <button type="submit" class="primary">Запустить</button>
     <a href="{{ url_for('ui.runs_list') }}" class="secondary">Отмена</a>
-    <span class="empty" id="form-hint">правка YAML вручную перекроет поля формы</span>
+    <span class="empty" id="form-hint">правка YAML вручную перекроет поля формы при сабмите</span>
   </div>
 </form>
 
 <script src="{{ url_for('static', filename='highlight.min.js') }}"></script>
 <script src="{{ url_for('static', filename='highlight-yaml.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js-yaml.min.js') }}"></script>
 <script>
 (function () {
   const form = document.getElementById('scenario-form');
   const ta = document.getElementById('scenario-textarea');
   const codeEl = document.getElementById('scenario-highlight');
   let userEdited = false;
+  let highlightTimer = null;
 
   function valOrNone(name) {
     const el = form.querySelector(`[name="${name}"]`);
@@ -156,15 +173,24 @@
     const el = form.querySelector(`[name="${name}"]:checked`);
     return el ? el.value : null;
   }
+  function setVal(name, v) {
+    const el = form.querySelector(`[name="${name}"]`);
+    if (el) el.value = (v === undefined || v === null) ? '' : String(v);
+  }
+  function setRadio(name, v) {
+    const el = form.querySelector(`[name="${name}"][value="${v}"]`);
+    if (el) el.checked = true;
+  }
 
+  // -------- YAML <- form --------
   function buildParticipant(prefix) {
     const type = radio(`_${prefix}_type`);
     const lines = [`  type: ${type}`];
     if (type === 'player') {
-      lines.push(`  class: ${valOrNone(`_${prefix}_class`)}`);
-      lines.push(`  level: ${valOrNone(`_${prefix}_level`)}`);
+      lines.push(`  class: ${valOrNone(`_${prefix}_class`) || 'bogatyr'}`);
+      lines.push(`  level: ${valOrNone(`_${prefix}_level`) || 30}`);
     } else {
-      lines.push(`  vnum: ${valOrNone(`_${prefix}_vnum`)}`);
+      lines.push(`  vnum: ${valOrNone(`_${prefix}_vnum`) || 0}`);
     }
     const stats = [];
     for (const s of ['str', 'dex', 'con', 'int', 'wis', 'cha']) {
@@ -199,6 +225,46 @@
     return parts.join('\n') + '\n';
   }
 
+  // -------- form <- YAML --------
+  function applyParticipant(prefix, p) {
+    if (!p || typeof p !== 'object') return;
+    if (p.type) setRadio(`_${prefix}_type`, p.type);
+    if (p.type === 'player') {
+      if (p.class !== undefined) setVal(`_${prefix}_class`, p.class);
+      if (p.level !== undefined) setVal(`_${prefix}_level`, p.level);
+    }
+    if (p.type === 'mob' && p.vnum !== undefined) setVal(`_${prefix}_vnum`, p.vnum);
+    const stats = p.stats || {};
+    for (const s of ['str', 'dex', 'con', 'int', 'wis', 'cha', 'max_hit']) {
+      setVal(`_${prefix}_${s}`, stats[s]);
+    }
+  }
+
+  function parseYamlToForm() {
+    if (!window.jsyaml) {
+      alert('js-yaml не загружен; ручной парсинг недоступен');
+      return;
+    }
+    let data;
+    try { data = jsyaml.load(ta.value); }
+    catch (e) { alert('YAML parse error: ' + e.message); return; }
+    if (!data || typeof data !== 'object') return;
+    if (data.seed !== undefined) setVal('_seed', data.seed);
+    if (data.rounds !== undefined) setVal('_rounds', data.rounds);
+    applyParticipant('atk', data.attacker);
+    applyParticipant('vic', data.victim);
+    const action = data.action;
+    if (action && action.type) {
+      setRadio('_action', action.type);
+      if (action.spell) setVal('_spell', action.spell);
+    } else {
+      setRadio('_action', 'melee');
+    }
+    updateAutocompleteFromHidden();
+    updateVisibility();
+    userEdited = false;  // form is now in sync with YAML
+  }
+
   function updateVisibility() {
     form.querySelectorAll('[data-show-when]').forEach(el => {
       const [k, v] = el.dataset.showWhen.split('=');
@@ -208,9 +274,12 @@
 
   function highlight() {
     if (!window.hljs) return;
-    codeEl.textContent = ta.value;
-    delete codeEl.dataset.highlighted;
-    hljs.highlightElement(codeEl);
+    if (highlightTimer) cancelAnimationFrame(highlightTimer);
+    highlightTimer = requestAnimationFrame(() => {
+      codeEl.textContent = ta.value;
+      delete codeEl.dataset.highlighted;
+      hljs.highlightElement(codeEl);
+    });
   }
 
   function regenerate() {
@@ -219,23 +288,110 @@
     highlight();
   }
 
-  // Auto-update YAML on form changes UNLESS the user has edited the textarea.
+  // -------- autocomplete widgets --------
+  const acTimers = new WeakMap();
+  function setupAutocomplete(root) {
+    const input = root.querySelector('.autocomplete-input');
+    const hidden = root.querySelector('input[type=hidden]');
+    const list = root.querySelector('.autocomplete-list');
+    const url = root.dataset.autocompleteSource;
+
+    function render(items) {
+      list.innerHTML = '';
+      if (!items.length) { list.classList.remove('open'); return; }
+      for (const item of items) {
+        const li = document.createElement('li');
+        if (url.endsWith('/spells')) {
+          li.textContent = item.rus;
+          li.dataset.value = item.rus;
+          const eng = document.createElement('span');
+          eng.className = 'autocomplete-eng';
+          eng.textContent = ' ' + item.eng;
+          li.appendChild(eng);
+        } else {  // mobs
+          li.dataset.value = String(item.vnum);
+          const num = document.createElement('span');
+          num.className = 'autocomplete-vnum';
+          num.textContent = `#${item.vnum}`;
+          const name = document.createElement('span');
+          name.className = 'autocomplete-name';
+          name.textContent = item.name;
+          li.appendChild(num);
+          li.appendChild(document.createTextNode(' '));
+          li.appendChild(name);
+        }
+        li.addEventListener('mousedown', (e) => {
+          e.preventDefault();
+          hidden.value = li.dataset.value;
+          input.value = (url.endsWith('/spells'))
+            ? item.rus
+            : `#${item.vnum} ${item.name}`;
+          list.classList.remove('open');
+          if (!userEdited) regenerate();
+        });
+        list.appendChild(li);
+      }
+      list.classList.add('open');
+    }
+
+    async function query() {
+      try {
+        const r = await fetch(`${url}?q=${encodeURIComponent(input.value)}`);
+        if (!r.ok) return;
+        const items = await r.json();
+        render(items);
+      } catch (_) { /* ignore network blips */ }
+    }
+
+    input.addEventListener('input', () => {
+      const t = acTimers.get(input);
+      if (t) clearTimeout(t);
+      acTimers.set(input, setTimeout(query, 120));
+    });
+    input.addEventListener('focus', query);
+    input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
+  }
+
+  function updateAutocompleteFromHidden() {
+    // After applying YAML or initial load, populate visible text from hidden.
+    form.querySelectorAll('.autocomplete').forEach(root => {
+      const input = root.querySelector('.autocomplete-input');
+      const hidden = root.querySelector('input[type=hidden]');
+      if (hidden.value && !input.value) {
+        if (root.dataset.autocompleteSource.endsWith('/spells')) {
+          input.value = hidden.value;
+        } else {
+          input.value = `#${hidden.value}`;
+        }
+      }
+    });
+  }
+
+  form.querySelectorAll('.autocomplete').forEach(setupAutocomplete);
+
+  // -------- wiring --------
   form.addEventListener('input', (e) => {
     if (e.target === ta) {
       userEdited = true;
       highlight();
       return;
     }
+    // Autocomplete `<input class=autocomplete-input>` is a search box,
+    // not a form value; ignore unless user picks an item.
+    if (e.target.matches('.autocomplete-input')) return;
     updateVisibility();
     if (!userEdited) regenerate();
   });
   form.addEventListener('change', (e) => {
     if (e.target.matches('input[type=radio]')) updateVisibility();
+    if (e.target.matches('.autocomplete-input')) return;
     if (!userEdited) regenerate();
   });
 
-  document.getElementById('regen-yaml').addEventListener('click', regenerate);
+  document.getElementById('yaml-from-form').addEventListener('click', regenerate);
+  document.getElementById('yaml-to-form').addEventListener('click', parseYamlToForm);
 
+  updateAutocompleteFromHidden();
   updateVisibility();
   regenerate();
 })();

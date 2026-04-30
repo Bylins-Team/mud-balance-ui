@@ -22,8 +22,9 @@ from pathlib import Path
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
 from . import meta as meta_mod
-from . import runner, storage
+from . import runner, storage, world
 from .encoding import colour_to_html
+from flask import jsonify
 
 bp = Blueprint("ui", __name__)
 
@@ -79,11 +80,14 @@ def run_view(run_id: str):
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
     if handle is None:
         abort(404)
+    # Start at round=-1 so the viewer opens on the pre-fight snapshot
+    # (slider left edge). Older `?t=` query strings are not migrated --
+    # the viewer was the only consumer of them.
     return render_template(
         "run_view.html",
         handle=handle,
         meta=storage.load_meta(handle),
-        initial_t=request.args.get("t", "0"),
+        initial_round=request.args.get("round", "-1"),
         initial_role=request.args.get("role", "attacker"),
     )
 
@@ -177,6 +181,24 @@ def api_screen(run_id: str):
             break
         chunks.append(colour_to_html(ev.get("text", "")))
     return render_template("partials/screen_panel.html", chunks=chunks, role=role)
+
+
+@bp.route("/api/spells")
+def api_spells():
+    """Autocomplete for `action.spell`. ?q= filters by substring (rus/eng)."""
+    q = request.args.get("q", "").strip()
+    world_dir = Path(current_app.config["MUD_SIM_WORLD_DIR"])
+    items = world.search_spells(world_dir, q)
+    return jsonify([{"rus": s.rus, "eng": s.eng} for s in items])
+
+
+@bp.route("/api/mobs")
+def api_mobs():
+    """Autocomplete for mob participants. ?q= filters by name or vnum."""
+    q = request.args.get("q", "").strip()
+    world_dir = Path(current_app.config["MUD_SIM_WORLD_DIR"])
+    items = world.search_mobs(world_dir, q)
+    return jsonify([{"vnum": m.vnum, "name": m.name} for m in items])
 
 
 @bp.route("/runs/<run_id>/delete", methods=["POST"])
