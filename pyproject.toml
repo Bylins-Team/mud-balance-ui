@@ -10,6 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "Flask>=3.0",
     "ruamel.yaml>=0.18",
+    "PyYAML>=6.0",  # C-loader released GIL, parallelises in ThreadPool
     "ulid-py>=1.1",
 ]
 

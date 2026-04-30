@@ -431,6 +431,20 @@ h3 { font-size: 15px; }
   margin: 0; font-size: 13px; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--fg-dim); font-weight: 600;
 }
+/* High-contrast YAML highlight overrides. The default github-dark theme
+   paints almost everything in a near-uniform blue; this override fans
+   them out into distinct hues that match the rest of our palette. */
+.hljs              { background: transparent !important; color: var(--fg) !important; }
+.hljs-attr         { color: var(--c-cM) !important; font-weight: 500; }   /* keys */
+.hljs-string       { color: var(--c-cG) !important; }                      /* values */
+.hljs-number       { color: var(--accent) !important; }                    /* ints/floats */
+.hljs-literal      { color: var(--c-cC) !important; font-weight: 500; }    /* true/false/null */
+.hljs-bullet       { color: var(--accent) !important; font-weight: 500; }  /* `-` list item */
+.hljs-meta         { color: var(--fg-mute) !important; }                   /* `---` doc start */
+.hljs-comment      { color: var(--fg-mute) !important; font-style: italic; }
+.hljs-tag,
+.hljs-symbol       { color: var(--c-cY) !important; }                      /* anchors / tags */
+
 /* Overlay code editor: textarea with transparent text on top of a
    highlighted <pre>, scroll-synced. Caret stays visible (caret-color),
    textarea text itself is invisible so the only colour you see comes
@@ -633,9 +647,22 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   gap: 6px;
   text-align: center;
 }
-.stat-row .stat { display: flex; flex-direction: column; gap: 1px; padding: 6px 4px; background: var(--bg-elev); border-radius: 4px; }
+.stat-row .stat {
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 6px 4px;
+  background: var(--bg-elev);
+  border-radius: 4px;
+  position: relative;
+}
 .stat-row .stat-label { font-size: 10px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
 .stat-row .stat-value { font-variant-numeric: tabular-nums; font-weight: 500; font-size: 14px; }
+.stat-row .stat-diff {
+  position: absolute;
+  top: 4px; right: 4px;
+  font-size: 9px;
+  color: var(--good);
+  font-weight: 500;
+}
 .aff-list, .feat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .aff-list li, .feat-list li {
   background: var(--bg-elev); padding: 2px 8px;

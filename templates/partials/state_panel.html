@@ -21,15 +21,26 @@
 
 {% set has_stats = snapshot.get('str') is not none or snapshot.get('dex') is not none %}
 {% if has_stats %}
+{% macro stat_cell(label, key) %}
+{% set eff = snapshot.get(key) %}
+{% set base = snapshot.get(key ~ '_base') %}
+<div class="stat" title="{% if base is not none and base != eff %}база {{ base }} + апплаи{% else %}база{% endif %}">
+  <span class="stat-label">{{ label }}</span>
+  <span class="stat-value">{{ eff if eff is not none else '?' }}</span>
+  {% if base is not none and eff is not none and base != eff %}
+  <span class="stat-diff">{% if eff > base %}+{{ eff - base }}{% else %}{{ eff - base }}{% endif %}</span>
+  {% endif %}
+</div>
+{% endmacro %}
 <section class="state-section">
   <h4>Атрибуты</h4>
   <div class="stat-row">
-    <div class="stat"><span class="stat-label">сила</span><span class="stat-value">{{ snapshot.get('str', '?') }}</span></div>
-    <div class="stat"><span class="stat-label">ловк</span><span class="stat-value">{{ snapshot.get('dex', '?') }}</span></div>
-    <div class="stat"><span class="stat-label">тело</span><span class="stat-value">{{ snapshot.get('con', '?') }}</span></div>
-    <div class="stat"><span class="stat-label">ум</span><span class="stat-value">{{ snapshot.get('int', '?') }}</span></div>
-    <div class="stat"><span class="stat-label">муд</span><span class="stat-value">{{ snapshot.get('wis', '?') }}</span></div>
-    <div class="stat"><span class="stat-label">обая</span><span class="stat-value">{{ snapshot.get('cha', '?') }}</span></div>
+    {{ stat_cell('сила', 'str') }}
+    {{ stat_cell('ловк', 'dex') }}
+    {{ stat_cell('тело', 'con') }}
+    {{ stat_cell('ум',   'int') }}
+    {{ stat_cell('муд',  'wis') }}
+    {{ stat_cell('обая', 'cha') }}
   </div>
 </section>
 {% endif %}
@@ -46,10 +57,27 @@
 <section class="state-section">
   <h4>Бонусы</h4>
   <dl class="state-grid">
-    <dt>spellpower +</dt><dd>{{ snapshot.spellpower_add_pct }}%</dd>
-    <dt>physdam +</dt><dd>{{ snapshot.physdam_add_pct }}%</dd>
+    {% if snapshot.get('hitroll') is not none %}<dt>hitroll</dt><dd>{{ '%+d'|format(snapshot.hitroll) }}</dd>{% endif %}
+    {% if snapshot.get('damroll') is not none %}<dt>damroll</dt><dd>{{ '%+d'|format(snapshot.damroll) }}</dd>{% endif %}
+    <dt>physdam %</dt><dd>{{ '%+d'|format(snapshot.physdam_add_pct) }}%</dd>
+    <dt>spellpower %</dt><dd>{{ '%+d'|format(snapshot.spellpower_add_pct) }}%</dd>
+    {% if snapshot.get('ac_add') is not none %}<dt>AC</dt><dd>{{ '%+d'|format(snapshot.ac_add) }}</dd>{% endif %}
+    {% if snapshot.get('armour_add') is not none %}<dt>armour</dt><dd>{{ '%+d'|format(snapshot.armour_add) }}</dd>{% endif %}
+    {% if snapshot.get('hit_add') is not none and snapshot.hit_add %}<dt>HP +</dt><dd>{{ snapshot.hit_add }}</dd>{% endif %}
+    {% if snapshot.get('morale_add') is not none and snapshot.morale_add %}<dt>морал</dt><dd>{{ snapshot.morale_add }}</dd>{% endif %}
+    {% if snapshot.get('initiative_add') is not none and snapshot.initiative_add %}<dt>инициатива</dt><dd>{{ snapshot.initiative_add }}</dd>{% endif %}
   </dl>
 </section>
+
+{% set fl = (snapshot.get('flags_list') or '').split('|') | reject('equalto', '') | list %}
+{% if fl %}
+<section class="state-section">
+  <h4>Активные флаги ({{ fl|length }})</h4>
+  <ul class="aff-list">
+    {% for f in fl %}<li class="active">{{ f }}</li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 {% set equip = (snapshot.get('equip_list') or '').split('|') | reject('equalto', '') | list %}
 {% if equip %}

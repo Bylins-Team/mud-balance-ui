@@ -13,12 +13,24 @@ cache in memory; the world doesn't change at runtime.
 
 from __future__ import annotations
 
+import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from ruamel.yaml import YAML
+import yaml as pyyaml
+
+try:
+    # libyaml C bindings -- 5-10x faster than the pure-Python loader, and
+    # crucially releases the GIL during parse so ThreadPoolExecutor can
+    # actually parallelise across files.
+    from yaml import CSafeLoader as _SafeLoader  # type: ignore[attr-defined]
+except ImportError:  # pragma: no cover -- fallback if libyaml isn't installed
+    from yaml import SafeLoader as _SafeLoader
+
+_PARSE_WORKERS = max(2, (os.cpu_count() or 4))
 
 
 @dataclass(frozen=True)
@@ -135,46 +147,49 @@ def load_spells(world_dir: Path) -> list[Spell]:
     return out
 
 
-def load_mobs(world_dir: Path) -> list[Mob]:
-    """Walk world/zones/*/mobs/*.yaml; index vnum + display name.
+def _parse_yaml_file(path: Path):
+    """Open a KOI8-R YAML file and return parsed data, or None on error."""
+    try:
+        with path.open("rb") as fh:
+            return pyyaml.load(fh.read().decode("koi8-r"), Loader=_SafeLoader)
+    except Exception:  # noqa: BLE001
+        return None
 
-    Yaml files are KOI8-R, but ruamel.yaml handles encoding via the open
-    mode -- we open as text with explicit encoding.
-    """
+
+def load_mobs(world_dir: Path) -> list[Mob]:
+    """Walk world/zones/*/mobs/*.yaml; index vnum + display name."""
     global _mobs_cache
     if _mobs_cache is not None:
         return _mobs_cache
 
-    yaml = YAML(typ="safe")
-    out: list[Mob] = []
-    seen_vnums: set[int] = set()
-
+    files: list[Path] = []
     zones_dir = world_dir / "world" / "zones"
     if zones_dir.is_dir():
-        for mob_file in sorted(zones_dir.glob("*/mobs/*.yaml")):
-            try:
-                with mob_file.open(encoding="koi8-r") as fh:
-                    data = yaml.load(fh)
-            except Exception:  # noqa: BLE001 -- skip malformed
-                continue
-            if not isinstance(data, dict):
-                continue
-            for entry in _iter_mob_entries(data):
-                vnum = entry.get("vnum")
-                if not isinstance(vnum, int) or vnum in seen_vnums:
+        files = sorted(zones_dir.glob("*/mobs/*.yaml"))
+
+    out: list[Mob] = []
+    seen_vnums: set[int] = set()
+    if files:
+        with ThreadPoolExecutor(max_workers=_PARSE_WORKERS) as ex:
+            for data in ex.map(_parse_yaml_file, files):
+                if not isinstance(data, dict):
                     continue
-                names = entry.get("names") or {}
-                name = (
-                    names.get("aliases")
-                    or names.get("nominative")
-                    or "?"
-                )
-                if isinstance(name, str):
-                    name = name.strip().splitlines()[0] if name else "?"
-                else:
-                    name = "?"
-                seen_vnums.add(vnum)
-                out.append(Mob(vnum=vnum, name=name))
+                for entry in _iter_mob_entries(data):
+                    vnum = entry.get("vnum")
+                    if not isinstance(vnum, int) or vnum in seen_vnums:
+                        continue
+                    names = entry.get("names") or {}
+                    name = (
+                        names.get("aliases")
+                        or names.get("nominative")
+                        or "?"
+                    )
+                    if isinstance(name, str):
+                        name = name.strip().splitlines()[0] if name else "?"
+                    else:
+                        name = "?"
+                    seen_vnums.add(vnum)
+                    out.append(Mob(vnum=vnum, name=name))
 
     out.sort(key=lambda m: m.vnum)
     _mobs_cache = out
@@ -228,50 +243,49 @@ def load_objects(world_dir: Path) -> list[Obj]:
     if _objs_cache is not None:
         return _objs_cache
 
-    yaml = YAML(typ="safe")
-    out: list[Obj] = []
-    seen: set[int] = set()
+    files: list[Path] = []
     zones_dir = world_dir / "world" / "zones"
     if zones_dir.is_dir():
-        for f in sorted(zones_dir.glob("*/objects/*.yaml")):
-            try:
-                with f.open(encoding="koi8-r") as fh:
-                    data = yaml.load(fh)
-            except Exception:  # noqa: BLE001
-                continue
-            if not isinstance(data, dict):
-                continue
-            for entry in _iter_obj_entries(data):
-                vnum = entry.get("vnum")
-                if not isinstance(vnum, int) or vnum in seen:
+        files = sorted(zones_dir.glob("*/objects/*.yaml"))
+
+    out: list[Obj] = []
+    seen: set[int] = set()
+    if files:
+        with ThreadPoolExecutor(max_workers=_PARSE_WORKERS) as ex:
+            for data in ex.map(_parse_yaml_file, files):
+                if not isinstance(data, dict):
                     continue
-                wear = entry.get("wear_flags") or []
-                if not isinstance(wear, list):
-                    continue
-                # Skip items that can only be picked up but not equipped.
-                wearable = [w for w in wear if isinstance(w, str) and w != "kTake"]
-                if not wearable:
-                    continue
-                names = entry.get("names") or {}
-                name = (
-                    (names.get("aliases") if isinstance(names, dict) else None)
-                    or (entry.get("short_desc") if isinstance(entry.get("short_desc"), str) else None)
-                    or "?"
-                )
-                if isinstance(name, str):
-                    name = name.strip().splitlines()[0] if name else "?"
-                else:
-                    name = "?"
-                obj_type = entry.get("type") if isinstance(entry.get("type"), str) else "?"
-                if obj_type not in WEARABLE_OBJ_TYPES:
-                    continue
-                seen.add(vnum)
-                out.append(Obj(
-                    vnum=vnum,
-                    name=name,
-                    obj_type=obj_type,
-                    wear_flags=tuple(wearable),
-                ))
+                for entry in _iter_obj_entries(data):
+                    vnum = entry.get("vnum")
+                    if not isinstance(vnum, int) or vnum in seen:
+                        continue
+                    wear = entry.get("wear_flags") or []
+                    if not isinstance(wear, list):
+                        continue
+                    # Skip items that can only be picked up but not equipped.
+                    wearable = [w for w in wear if isinstance(w, str) and w != "kTake"]
+                    if not wearable:
+                        continue
+                    names = entry.get("names") or {}
+                    name = (
+                        (names.get("aliases") if isinstance(names, dict) else None)
+                        or (entry.get("short_desc") if isinstance(entry.get("short_desc"), str) else None)
+                        or "?"
+                    )
+                    if isinstance(name, str):
+                        name = name.strip().splitlines()[0] if name else "?"
+                    else:
+                        name = "?"
+                    obj_type = entry.get("type") if isinstance(entry.get("type"), str) else "?"
+                    if obj_type not in WEARABLE_OBJ_TYPES:
+                        continue
+                    seen.add(vnum)
+                    out.append(Obj(
+                        vnum=vnum,
+                        name=name,
+                        obj_type=obj_type,
+                        wear_flags=tuple(wearable),
+                    ))
 
     out.sort(key=lambda o: o.vnum)
     _objs_cache = out

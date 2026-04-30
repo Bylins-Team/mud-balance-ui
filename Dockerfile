@@ -54,6 +54,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libyaml-cpp0.8 libfmt9 libcurl4t64 libexpat1 libssl3t64 zlib1g \
+    libyaml-0-2 \
     python3 python3-pip python3-venv curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
