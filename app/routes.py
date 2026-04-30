@@ -131,6 +131,74 @@ def run_status(run_id: str):
     })
 
 
+@bp.route("/runs/<run_id>/api/analytics")
+def api_analytics(run_id: str):
+    """Per-round aggregates for the analytics panel charts.
+
+    Returns:
+      labels:     ["round 0", "round 1", ...] (length = rounds)
+      hp_victim:  victim HP after each round (from `round` events)
+      damage_breakdown: {
+          master_melee: [...], master_spell: [...], pets: [...]
+      } -- per-round damage from `damage` events grouped by attacker.
+      cumulative: total damage cumulatively per round.
+    """
+    handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
+    if handle is None:
+        abort(404)
+    meta = storage.load_meta(handle)
+    round_ts = meta.get("round_ts") or []
+    rounds = len(round_ts)
+    if not rounds:
+        return jsonify({"labels": [], "hp_victim": [], "damage_breakdown": {}, "cumulative": []})
+
+    melee = [0] * rounds
+    spell = [0] * rounds
+    pet   = [0] * rounds
+    hp_victim = [0] * rounds
+
+    def round_for_ts(ts: int) -> int:
+        # First round whose ts >= event.ts -- that's "this damage is part of round N"
+        for i, r_ts in enumerate(round_ts):
+            if ts <= r_ts:
+                return i
+        return rounds - 1
+
+    for ev in _iter_events(handle.events_path):
+        name = ev.get("name")
+        ts = int(ev.get("ts", 0))
+        if name == "damage":
+            r = round_for_ts(ts)
+            dam = int(ev.get("dam", 0))
+            if ev.get("attacker_is_charmie"):
+                pet[r] += dam
+            elif int(ev.get("spell_id", 0)) != 0:
+                spell[r] += dam
+            else:
+                melee[r] += dam
+        elif name == "round":
+            r = int(ev.get("round", -1))
+            if 0 <= r < rounds:
+                hp_victim[r] = int(ev.get("hp_after", 0))
+
+    cumulative = []
+    running = 0
+    for i in range(rounds):
+        running += melee[i] + spell[i] + pet[i]
+        cumulative.append(running)
+
+    return jsonify({
+        "labels": [f"R{i}" for i in range(rounds)],
+        "hp_victim": hp_victim,
+        "damage_breakdown": {
+            "master_melee": melee,
+            "master_spell": spell,
+            "pets": pet,
+        },
+        "cumulative": cumulative,
+    })
+
+
 @bp.route("/runs/<run_id>/events.jsonl")
 def run_events(run_id: str):
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)

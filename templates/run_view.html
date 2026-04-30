@@ -30,6 +30,24 @@
   <pre><code class="language-yaml">{{ meta.get('scenario_yaml', '') }}</code></pre>
 </details>
 
+<details class="analytics" id="analytics-pane" data-run-id="{{ handle.run_id }}">
+  <summary>Аналитика</summary>
+  <div class="analytics-grid">
+    <div class="chart-card">
+      <h3>HP жертвы по раундам</h3>
+      <canvas id="chart-hp"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Урон по раундам (источник)</h3>
+      <canvas id="chart-breakdown"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Кумулятивный урон</h3>
+      <canvas id="chart-cumulative"></canvas>
+    </div>
+  </div>
+</details>
+
 <section class="viewer"
          data-run-id="{{ handle.run_id }}"
          data-max-round="{{ max_round }}"
@@ -40,9 +58,14 @@
     <aside class="viewer-roles panel">
       <div class="panel-header">
         <h2>Участник</h2>
+        {# Roles populated from meta.roles -- includes attacker_pet_N /
+           victim_pet_N when the scenario had pets. Fallback to the two
+           main roles if older runs don't carry the list. #}
+        {% set roles = meta.get('roles') or ['attacker', 'victim'] %}
         <select id="role-select" name="role">
-          <option value="attacker"{% if initial_role == 'attacker' %} selected{% endif %}>attacker</option>
-          <option value="victim"{% if initial_role == 'victim' %} selected{% endif %}>victim</option>
+          {% for r in roles %}
+          <option value="{{ r }}"{% if initial_role == r %} selected{% endif %}>{{ r }}</option>
+          {% endfor %}
         </select>
       </div>
       <div id="state-panel" class="panel-body state-panel">
@@ -85,6 +108,63 @@
 
 <script src="{{ url_for('static', filename='highlight.min.js') }}"></script>
 <script src="{{ url_for('static', filename='highlight-yaml.min.js') }}"></script>
+<script src="{{ url_for('static', filename='chart.umd.js') }}"></script>
+<script>
+// Analytics charts -- fetched & rendered once when the user opens the
+// <details> pane. Avoids paying the cost on every viewer load.
+(function () {
+  const pane = document.getElementById('analytics-pane');
+  if (!pane) return;
+  let initialized = false;
+  pane.addEventListener('toggle', async () => {
+    if (!pane.open || initialized || !window.Chart) return;
+    initialized = true;
+    const r = await fetch(`/runs/${pane.dataset.runId}/api/analytics`, {credentials: 'include'});
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.labels.length) return;
+    const accent = '#ee854a', good = '#6acc64', info = '#5fadea', dim = '#828a96';
+    const grid = 'rgba(255,255,255,0.06)';
+    const tickColor = '#828a96';
+    const common = {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#d4d8df' } } },
+      scales: {
+        x: { ticks: { color: tickColor }, grid: { color: grid } },
+        y: { ticks: { color: tickColor }, grid: { color: grid }, beginAtZero: true },
+      },
+    };
+    new Chart(document.getElementById('chart-hp'), {
+      type: 'line',
+      data: { labels: data.labels, datasets: [{
+        label: 'HP жертвы', data: data.hp_victim, borderColor: info,
+        backgroundColor: 'rgba(95,173,234,0.15)', fill: true, tension: 0.2,
+      }]},
+      options: common,
+    });
+    new Chart(document.getElementById('chart-breakdown'), {
+      type: 'bar',
+      data: { labels: data.labels, datasets: [
+        { label: 'master melee', data: data.damage_breakdown.master_melee, backgroundColor: info },
+        { label: 'master spell', data: data.damage_breakdown.master_spell, backgroundColor: accent },
+        { label: 'pets',         data: data.damage_breakdown.pets,         backgroundColor: good },
+      ]},
+      options: { ...common, scales: {
+        x: { ...common.scales.x, stacked: true },
+        y: { ...common.scales.y, stacked: true },
+      }},
+    });
+    new Chart(document.getElementById('chart-cumulative'), {
+      type: 'line',
+      data: { labels: data.labels, datasets: [{
+        label: 'суммарный урон', data: data.cumulative, borderColor: accent,
+        backgroundColor: 'rgba(238,133,74,0.18)', fill: true, tension: 0.1,
+      }]},
+      options: common,
+    });
+  });
+})();
+</script>
 <script>
 (function () {
   // Syntax-highlight the read-only scenario YAML block.

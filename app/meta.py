@@ -29,6 +29,10 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
     first_ts: int | None = None
     last_ts: int | None = None
     round_ts: list[int] = []
+    # All distinct `role` values seen in char_state events. Used by the
+    # viewer to populate the role <select> -- so attacker_pet_N / victim_pet_N
+    # become selectable when the scenario had pets.
+    roles: list[str] = []
 
     if events_path.is_file():
         with events_path.open() as fh:
@@ -49,6 +53,10 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
                     damage_count += 1
                 elif name == "miss":
                     miss_count += 1
+                elif name == "char_state":
+                    role = ev.get("role")
+                    if isinstance(role, str) and role not in roles:
+                        roles.append(role)
                 elif name == "round":
                     rounds += 1
                     if isinstance(ts, int):
@@ -75,6 +83,7 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
         "events_total": total,
         "rounds": rounds,
         "round_ts": round_ts,
+        "roles": roles,
         "dpr": round(dpr, 2),
         "hit_rate_pct": round(hit_rate, 1),
         "attacker": attacker_label or "?",

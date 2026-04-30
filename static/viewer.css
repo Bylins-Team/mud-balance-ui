@@ -656,6 +656,47 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   background: var(--bg-elev);
 }
 
+/* Analytics fold -- charts of HP / damage breakdown / cumulative damage.
+   Same <details> visual as scenario-source for consistency. */
+.analytics {
+  margin-bottom: 12px;
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-radius: var(--radius);
+}
+.analytics summary {
+  cursor: pointer;
+  padding: 10px 14px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  user-select: none;
+}
+.analytics[open] summary { border-bottom: 1px solid var(--panel-edge); }
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+.chart-card {
+  background: var(--bg-elev);
+  border-radius: 4px;
+  padding: 12px;
+  min-height: 240px;
+  display: flex; flex-direction: column;
+}
+.chart-card h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--fg-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+}
+.chart-card canvas { flex: 1; min-height: 0; }
+
 /* viewer layout: 3 columns + bottom timeline. Computed-grid heights. */
 .viewer { display: flex; flex-direction: column; gap: 12px; }
 .viewer-row {
