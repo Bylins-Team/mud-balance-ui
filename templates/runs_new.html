@@ -166,9 +166,9 @@
   </aside>
 
   <div class="form-actions">
-    <button type="submit" class="primary">Запустить</button>
+    <button type="submit" class="primary big-cta" accesskey="s" title="Запустить (Ctrl/⌘+Enter)">▶ Запустить прогон</button>
     <a href="{{ url_for('ui.runs_list') }}" class="secondary">Отмена</a>
-    <span class="empty" id="form-hint">правка YAML вручную перекроет поля формы при сабмите</span>
+    <span class="empty" id="form-hint">Ctrl+Enter — запустить, правка YAML руками перекроет поля формы</span>
   </div>
 </form>
 
@@ -634,6 +634,14 @@
 
   document.getElementById('yaml-from-form').addEventListener('click', regenerate);
   document.getElementById('yaml-to-form').addEventListener('click', parseYamlToForm);
+
+  // Ctrl/⌘+Enter -- submit from anywhere in the form.
+  form.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
 
   updateAutocompleteFromHidden();
   updateVisibility();

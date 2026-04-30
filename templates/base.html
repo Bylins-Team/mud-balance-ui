@@ -11,9 +11,16 @@
 <body>
 <header class="topbar">
   <a class="brand" href="{{ url_for('ui.runs_list') }}">mud-balance-ui</a>
+  {% set _path = request.path %}
   <nav>
-    <a href="{{ url_for('ui.runs_list') }}">Прогоны</a>
+    <a href="{{ url_for('ui.runs_list') }}"{% if _path == url_for('ui.runs_list') %} class="active"{% endif %}>Прогоны</a>
+    {# On /runs/new the "Новый прогон" link would just reset the form
+       on accidental click. Render it as a static "active" badge. #}
+    {% if _path == url_for('ui.runs_new') %}
+    <span class="active primary disabled" title="вы здесь">Новый прогон</span>
+    {% else %}
     <a href="{{ url_for('ui.runs_new') }}" class="primary">Новый прогон</a>
+    {% endif %}
   </nav>
 </header>
 <main>
