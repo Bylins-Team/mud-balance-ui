@@ -77,10 +77,16 @@
         <label>wis <input type="number" name="_atk_wis" min="1" max="90" placeholder="25"></label>
         <label>cha <input type="number" name="_atk_cha" min="1" max="90" placeholder="25"></label>
       </div>
-      <div class="field-row">
-        <label for="atk_inventory">экипировка</label>
-        <input type="text" id="atk_inventory" name="_atk_inventory" placeholder="111, 207 (через запятую)" autocomplete="off">
-      </div>
+      <fieldset class="subsection">
+        <legend>Экипировка</legend>
+        <ul class="kit-list" data-kit-prefix="atk"></ul>
+        <button type="button" class="secondary kit-add" data-kit-prefix="atk">+ предмет</button>
+      </fieldset>
+      <fieldset class="subsection">
+        <legend>Чармисы / нежить</legend>
+        <ul class="pet-list" data-pet-prefix="atk"></ul>
+        <button type="button" class="secondary pet-add" data-pet-prefix="atk">+ моб</button>
+      </fieldset>
       <div class="field-row">
         <label for="atk_affects">аффекты</label>
         <input type="text" id="atk_affects" name="_atk_affects" placeholder="защита, доблесть (через запятую)" autocomplete="off">
@@ -121,10 +127,16 @@
         <label for="vic_max_hit">max_hit</label>
         <input type="number" id="vic_max_hit" name="_vic_max_hit" min="1" placeholder="по умолчанию">
       </div>
-      <div class="field-row">
-        <label for="vic_inventory">экипировка</label>
-        <input type="text" id="vic_inventory" name="_vic_inventory" placeholder="111, 207 (через запятую)" autocomplete="off">
-      </div>
+      <fieldset class="subsection">
+        <legend>Экипировка</legend>
+        <ul class="kit-list" data-kit-prefix="vic"></ul>
+        <button type="button" class="secondary kit-add" data-kit-prefix="vic">+ предмет</button>
+      </fieldset>
+      <fieldset class="subsection">
+        <legend>Чармисы / нежить</legend>
+        <ul class="pet-list" data-pet-prefix="vic"></ul>
+        <button type="button" class="secondary pet-add" data-pet-prefix="vic">+ моб</button>
+      </fieldset>
       <div class="field-row">
         <label for="vic_affects">аффекты</label>
         <input type="text" id="vic_affects" name="_vic_affects" placeholder="защита, доблесть" autocomplete="off">
@@ -155,13 +167,14 @@
     <div class="panel-header">
       <h3>YAML сценария</h3>
       <div class="yaml-actions">
-        <button type="button" id="yaml-toggle-preview" class="secondary" title="переключить подсветку синтаксиса (read-only)">👁</button>
         <button type="button" id="yaml-from-form" class="secondary" title="перегенерировать YAML из полей формы">↻ из формы</button>
         <button type="button" id="yaml-to-form" class="secondary" title="распарсить YAML обратно в поля формы">→ в форму</button>
       </div>
     </div>
-    <textarea name="scenario" id="scenario-textarea" class="scenario-yaml-edit" spellcheck="false"></textarea>
-    <pre class="scenario-yaml-pre"><code id="scenario-highlight" class="language-yaml"></code></pre>
+    <div class="code-editor">
+      <pre class="code-editor-bg" aria-hidden="true"><code id="scenario-highlight" class="language-yaml"></code></pre>
+      <textarea name="scenario" id="scenario-textarea" class="code-editor-input" spellcheck="false" autocomplete="off"></textarea>
+    </div>
   </aside>
 
   <div class="form-actions">
@@ -226,14 +239,28 @@
       lines.push('  stats:');
       lines.push(...stats);
     }
-    const inv = csvList(`_${prefix}_inventory`).map(Number).filter(n => !isNaN(n));
+    const inv = collectKit(prefix);
     if (inv.length) lines.push(`  inventory: [${inv.join(', ')}]`);
+    const pets = collectPets(prefix);
+    if (pets.length) {
+      lines.push('  pets:');
+      for (const p of pets) lines.push(`    - { vnum: ${p} }`);
+    }
     const affs = csvList(`_${prefix}_affects`);
     if (affs.length) {
       lines.push('  affects:');
       for (const a of affs) lines.push(`    - { spell: ${a} }`);
     }
     return lines.join('\n');
+  }
+
+  function collectKit(prefix) {
+    const list = form.querySelector(`.kit-list[data-kit-prefix="${prefix}"]`);
+    return [...list.querySelectorAll('.kit-row [data-vnum]')].map(el => parseInt(el.dataset.vnum, 10)).filter(n => !isNaN(n));
+  }
+  function collectPets(prefix) {
+    const list = form.querySelector(`.pet-list[data-pet-prefix="${prefix}"]`);
+    return [...list.querySelectorAll('.pet-row [data-vnum]')].map(el => parseInt(el.dataset.vnum, 10)).filter(n => !isNaN(n));
   }
 
   function buildYaml() {
@@ -269,7 +296,18 @@
       setVal(`_${prefix}_${s}`, stats[s]);
     }
     if (Array.isArray(p.inventory)) {
-      setVal(`_${prefix}_inventory`, p.inventory.join(', '));
+      const list = form.querySelector(`.kit-list[data-kit-prefix="${prefix}"]`);
+      list.innerHTML = '';
+      for (const v of p.inventory) addKitRow(list, '', String(v));
+    }
+    if (Array.isArray(p.pets)) {
+      const list = form.querySelector(`.pet-list[data-pet-prefix="${prefix}"]`);
+      list.innerHTML = '';
+      for (const pet of p.pets) {
+        if (typeof pet === 'object' && pet.vnum !== undefined) {
+          addPetRow(list, String(pet.vnum));
+        }
+      }
     }
     if (Array.isArray(p.affects)) {
       const names = p.affects.map(a => (typeof a === 'object' && a.spell) ? a.spell : '').filter(Boolean);
@@ -313,11 +351,21 @@
     if (!window.hljs) return;
     if (highlightTimer) cancelAnimationFrame(highlightTimer);
     highlightTimer = requestAnimationFrame(() => {
-      codeEl.textContent = ta.value;
+      // Trailing newline keeps the last line visible behind the textarea
+      // when the user has just inserted one.
+      codeEl.textContent = ta.value + '\n';
       delete codeEl.dataset.highlighted;
       hljs.highlightElement(codeEl);
     });
   }
+
+  // Keep the highlighted background scrolled in sync with the textarea
+  // overlay; without this the cursor position drifts away from the colours.
+  const bgPre = document.querySelector('.code-editor-bg');
+  ta.addEventListener('scroll', () => {
+    bgPre.scrollTop = ta.scrollTop;
+    bgPre.scrollLeft = ta.scrollLeft;
+  });
 
   function regenerate() {
     ta.value = buildYaml();
@@ -406,6 +454,177 @@
 
   form.querySelectorAll('.autocomplete').forEach(setupAutocomplete);
 
+  // -------- inventory rows (slot + autocomplete) --------
+  const SLOTS = [
+    {key: 'wield',  label: 'оружие'},
+    {key: 'hold',   label: 'в руке'},
+    {key: 'shield', label: 'щит'},
+    {key: 'head',   label: 'голова'},
+    {key: 'body',   label: 'тело'},
+    {key: 'legs',   label: 'ноги'},
+    {key: 'feet',   label: 'обувь'},
+    {key: 'hands',  label: 'кисти'},
+    {key: 'arms',   label: 'руки'},
+    {key: 'about',  label: 'плащ'},
+    {key: 'waist',  label: 'пояс'},
+    {key: 'wrist',  label: 'запястья'},
+    {key: 'neck',   label: 'шея'},
+    {key: 'finger', label: 'палец'},
+    {key: 'quiver', label: 'колчан'},
+  ];
+
+  function addKitRow(list, slot, vnum) {
+    const li = document.createElement('li');
+    li.className = 'kit-row';
+    const slotSel = document.createElement('select');
+    slotSel.className = 'kit-slot';
+    for (const s of SLOTS) {
+      const opt = document.createElement('option');
+      opt.value = s.key; opt.textContent = s.label;
+      if (s.key === slot) opt.selected = true;
+      slotSel.appendChild(opt);
+    }
+    const ac = document.createElement('div');
+    ac.className = 'autocomplete';
+    ac.dataset.autocompleteSource = '/api/objects';
+    ac.innerHTML = `
+      <input type="text" class="autocomplete-input" placeholder="имя или vnum…" autocomplete="off">
+      <input type="hidden" class="kit-vnum">
+      <ul class="autocomplete-list"></ul>`;
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'kit-del'; del.textContent = '×';
+    del.title = 'убрать';
+    del.addEventListener('click', () => { li.remove(); if (!userEdited) regenerate(); });
+    li.appendChild(slotSel);
+    li.appendChild(ac);
+    li.appendChild(del);
+    list.appendChild(li);
+    setupKitAutocomplete(ac, slotSel);
+    if (vnum) {
+      ac.querySelector('.kit-vnum').dataset.vnum = vnum;
+      ac.querySelector('.kit-vnum').value = vnum;
+      ac.querySelector('.autocomplete-input').value = `#${vnum}`;
+    }
+    slotSel.addEventListener('change', () => {
+      // Reset selection on slot switch -- the previous item may not fit.
+      ac.querySelector('.autocomplete-input').value = '';
+      ac.querySelector('.kit-vnum').value = '';
+      delete ac.querySelector('.kit-vnum').dataset.vnum;
+      if (!userEdited) regenerate();
+    });
+  }
+
+  function setupKitAutocomplete(root, slotSel) {
+    const input = root.querySelector('.autocomplete-input');
+    const hidden = root.querySelector('.kit-vnum');
+    const list = root.querySelector('.autocomplete-list');
+    async function query() {
+      const slot = slotSel.value;
+      try {
+        const r = await fetch(`/api/objects?slot=${slot}&q=${encodeURIComponent(input.value)}`);
+        if (!r.ok) return;
+        const items = await r.json();
+        list.innerHTML = '';
+        if (!items.length) { list.classList.remove('open'); return; }
+        for (const item of items) {
+          const li = document.createElement('li');
+          const num = document.createElement('span'); num.className = 'autocomplete-vnum'; num.textContent = `#${item.vnum}`;
+          const name = document.createElement('span'); name.className = 'autocomplete-name'; name.textContent = item.name;
+          li.appendChild(num); li.appendChild(document.createTextNode(' ')); li.appendChild(name);
+          li.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            hidden.value = item.vnum;
+            hidden.dataset.vnum = item.vnum;
+            input.value = `#${item.vnum} ${item.name}`;
+            list.classList.remove('open');
+            if (!userEdited) regenerate();
+          });
+          list.appendChild(li);
+        }
+        list.classList.add('open');
+      } catch (_) {}
+    }
+    let t;
+    input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(query, 120); });
+    input.addEventListener('focus', query);
+    input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
+  }
+
+  // -------- pet rows (mob autocomplete) --------
+  function addPetRow(list, vnum) {
+    const li = document.createElement('li');
+    li.className = 'pet-row';
+    const ac = document.createElement('div');
+    ac.className = 'autocomplete';
+    ac.dataset.autocompleteSource = '/api/mobs';
+    ac.innerHTML = `
+      <input type="text" class="autocomplete-input" placeholder="моб (имя или vnum)…" autocomplete="off">
+      <input type="hidden" class="pet-vnum">
+      <ul class="autocomplete-list"></ul>`;
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'kit-del'; del.textContent = '×';
+    del.title = 'убрать';
+    del.addEventListener('click', () => { li.remove(); if (!userEdited) regenerate(); });
+    li.appendChild(ac);
+    li.appendChild(del);
+    list.appendChild(li);
+    setupPetAutocomplete(ac);
+    if (vnum) {
+      ac.querySelector('.pet-vnum').dataset.vnum = vnum;
+      ac.querySelector('.pet-vnum').value = vnum;
+      ac.querySelector('.autocomplete-input').value = `#${vnum}`;
+    }
+  }
+
+  function setupPetAutocomplete(root) {
+    const input = root.querySelector('.autocomplete-input');
+    const hidden = root.querySelector('.pet-vnum');
+    const list = root.querySelector('.autocomplete-list');
+    async function query() {
+      try {
+        const r = await fetch(`/api/mobs?q=${encodeURIComponent(input.value)}`);
+        if (!r.ok) return;
+        const items = await r.json();
+        list.innerHTML = '';
+        if (!items.length) { list.classList.remove('open'); return; }
+        for (const item of items) {
+          const li = document.createElement('li');
+          const num = document.createElement('span'); num.className = 'autocomplete-vnum'; num.textContent = `#${item.vnum}`;
+          const name = document.createElement('span'); name.className = 'autocomplete-name'; name.textContent = item.name;
+          li.appendChild(num); li.appendChild(document.createTextNode(' ')); li.appendChild(name);
+          li.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            hidden.value = item.vnum;
+            hidden.dataset.vnum = item.vnum;
+            input.value = `#${item.vnum} ${item.name}`;
+            list.classList.remove('open');
+            if (!userEdited) regenerate();
+          });
+          list.appendChild(li);
+        }
+        list.classList.add('open');
+      } catch (_) {}
+    }
+    let t;
+    input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(query, 120); });
+    input.addEventListener('focus', query);
+    input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
+  }
+
+  // Wire "+" buttons.
+  form.querySelectorAll('.kit-add').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const list = form.querySelector(`.kit-list[data-kit-prefix="${btn.dataset.kitPrefix}"]`);
+      addKitRow(list, 'wield', '');
+    });
+  });
+  form.querySelectorAll('.pet-add').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const list = form.querySelector(`.pet-list[data-pet-prefix="${btn.dataset.petPrefix}"]`);
+      addPetRow(list, '');
+    });
+  });
+
   // -------- wiring --------
   form.addEventListener('input', (e) => {
     if (e.target === ta) {
@@ -427,27 +646,6 @@
 
   document.getElementById('yaml-from-form').addEventListener('click', regenerate);
   document.getElementById('yaml-to-form').addEventListener('click', parseYamlToForm);
-
-  // Preview mode: highlighted, read-only. Toggle by button or by clicking
-  // the preview itself to switch back to edit.
-  const yamlPanel = document.querySelector('.scenario-yaml');
-  const toggleBtn = document.getElementById('yaml-toggle-preview');
-  toggleBtn.addEventListener('click', () => {
-    yamlPanel.classList.toggle('preview-mode');
-    if (yamlPanel.classList.contains('preview-mode')) {
-      highlight();
-      toggleBtn.textContent = '✎';
-      toggleBtn.title = 'вернуться к редактированию';
-    } else {
-      toggleBtn.textContent = '👁';
-      toggleBtn.title = 'переключить подсветку синтаксиса (read-only)';
-    }
-  });
-  document.querySelector('.scenario-yaml-pre').addEventListener('click', () => {
-    yamlPanel.classList.remove('preview-mode');
-    toggleBtn.textContent = '👁';
-    ta.focus();
-  });
 
   updateAutocompleteFromHidden();
   updateVisibility();

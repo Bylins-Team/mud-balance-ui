@@ -41,8 +41,52 @@ class Mob:
         return q in self.name.lower() or q in str(self.vnum)
 
 
+@dataclass(frozen=True)
+class Obj:
+    vnum: int
+    name: str
+    obj_type: str  # kWeapon, kArmor, ...
+    wear_flags: tuple[str, ...]
+
+    def matches(self, query: str) -> bool:
+        q = query.lower()
+        return q in self.name.lower() or q in str(self.vnum)
+
+    def fits_slot(self, slot: str) -> bool:
+        # slot is one of the keys in SLOT_FLAGS below (e.g. "wield"); we
+        # check that *any* of the required wear-flags is present on the
+        # item. Empty slot filter -> "any wearable".
+        if not slot:
+            return True
+        flags = SLOT_FLAGS.get(slot, ())
+        return any(f in self.wear_flags for f in flags)
+
+
+# Slot key -> tuple of wear-flag strings the engine uses. Keys are stable
+# identifiers we expose in the UI; values come from /opt/small/world YAML.
+# kHold has overlap with kWield (you can hold a one-hand weapon in either
+# hand), so we list it in both buckets and let the user pick.
+SLOT_FLAGS: dict[str, tuple[str, ...]] = {
+    "wield":  ("kWield", "kBoth"),
+    "hold":   ("kHold", "kWield"),
+    "shield": ("kShield",),
+    "head":   ("kHead",),
+    "body":   ("kBody",),
+    "legs":   ("kLegs",),
+    "feet":   ("kFeet",),
+    "hands":  ("kHands",),
+    "arms":   ("kArms",),
+    "about":  ("kAbout",),
+    "waist":  ("kWaist",),
+    "wrist":  ("kWrist",),
+    "neck":   ("kNeck",),
+    "finger": ("kFinger",),
+    "quiver": ("kQuiver",),
+}
+
 _spells_cache: list[Spell] | None = None
 _mobs_cache: list[Mob] | None = None
+_objs_cache: list[Obj] | None = None
 
 _SPELL_NAME_RE = re.compile(
     rb'<name\s+rus="([^"]+)"\s+eng="([^"]+)"\s*/>'
@@ -160,3 +204,79 @@ def search_mobs(world_dir: Path, query: str, limit: int = 25) -> list[Mob]:
     if not query:
         return load_mobs(world_dir)[:limit]
     return [m for m in load_mobs(world_dir) if m.matches(query)][:limit]
+
+
+def load_objects(world_dir: Path) -> list[Obj]:
+    """Walk world/zones/*/objects/*.yaml; index vnum + name + wear_flags.
+
+    Same KOI8-R yaml format as mobs. Items without a wear_flags entry, or
+    with only `kTake`, are skipped -- we only care about wearable kit.
+    """
+    global _objs_cache
+    if _objs_cache is not None:
+        return _objs_cache
+
+    yaml = YAML(typ="safe")
+    out: list[Obj] = []
+    seen: set[int] = set()
+    zones_dir = world_dir / "world" / "zones"
+    if zones_dir.is_dir():
+        for f in sorted(zones_dir.glob("*/objects/*.yaml")):
+            try:
+                with f.open(encoding="koi8-r") as fh:
+                    data = yaml.load(fh)
+            except Exception:  # noqa: BLE001
+                continue
+            if not isinstance(data, dict):
+                continue
+            for entry in _iter_obj_entries(data):
+                vnum = entry.get("vnum")
+                if not isinstance(vnum, int) or vnum in seen:
+                    continue
+                wear = entry.get("wear_flags") or []
+                if not isinstance(wear, list):
+                    continue
+                # Skip items that can only be picked up but not equipped.
+                wearable = [w for w in wear if isinstance(w, str) and w != "kTake"]
+                if not wearable:
+                    continue
+                names = entry.get("names") or {}
+                name = (
+                    (names.get("aliases") if isinstance(names, dict) else None)
+                    or (entry.get("short_desc") if isinstance(entry.get("short_desc"), str) else None)
+                    or "?"
+                )
+                if isinstance(name, str):
+                    name = name.strip().splitlines()[0] if name else "?"
+                else:
+                    name = "?"
+                obj_type = entry.get("type") if isinstance(entry.get("type"), str) else "?"
+                seen.add(vnum)
+                out.append(Obj(
+                    vnum=vnum,
+                    name=name,
+                    obj_type=obj_type,
+                    wear_flags=tuple(wearable),
+                ))
+
+    out.sort(key=lambda o: o.vnum)
+    _objs_cache = out
+    return out
+
+
+def _iter_obj_entries(data: dict):
+    if "vnum" in data:
+        yield data
+        return
+    objs = data.get("objects") or data.get("objs")
+    if isinstance(objs, list):
+        for o in objs:
+            if isinstance(o, dict):
+                yield o
+
+
+def search_objects(world_dir: Path, slot: str, query: str, limit: int = 25) -> list[Obj]:
+    items = [o for o in load_objects(world_dir) if o.fits_slot(slot)]
+    if query:
+        items = [o for o in items if o.matches(query)]
+    return items[:limit]

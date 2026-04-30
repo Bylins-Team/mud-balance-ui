@@ -201,6 +201,20 @@ def api_mobs():
     return jsonify([{"vnum": m.vnum, "name": m.name} for m in items])
 
 
+@bp.route("/api/objects")
+def api_objects():
+    """Autocomplete for inventory. ?slot=wield|body|... narrows by wear-flag,
+    ?q= filters by name/vnum substring."""
+    q = request.args.get("q", "").strip()
+    slot = request.args.get("slot", "").strip()
+    world_dir = Path(current_app.config["MUD_SIM_WORLD_DIR"])
+    items = world.search_objects(world_dir, slot, q)
+    return jsonify([
+        {"vnum": o.vnum, "name": o.name, "type": o.obj_type, "wear_flags": list(o.wear_flags)}
+        for o in items
+    ])
+
+
 @bp.route("/runs/<run_id>/delete", methods=["POST"])
 def run_delete(run_id: str):
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)

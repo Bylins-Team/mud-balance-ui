@@ -368,6 +368,50 @@ h3 { font-size: 15px; }
   height: 26px; padding: 0 10px; font-size: 12px;
 }
 
+/* Inline subsections inside an Atk/Vic fieldset (kit, pets). */
+.scenario-fields fieldset.subsection {
+  border: 1px dashed var(--panel-edge-soft);
+  padding: 8px 10px 10px;
+  margin: 0 0 10px;
+  background: rgba(255,255,255,0.015);
+}
+.scenario-fields fieldset.subsection legend {
+  color: var(--fg-dim);
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 11px;
+}
+.kit-list, .pet-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.kit-row, .pet-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.pet-row { grid-template-columns: 1fr auto; }
+.kit-slot {
+  height: 30px; padding: 0 28px 0 10px;
+  font-size: 12px;
+  min-width: 110px;
+}
+.kit-del {
+  width: 26px; height: 26px;
+  background: transparent;
+  color: var(--fg-mute);
+  border: 1px solid var(--panel-edge);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+.kit-del:hover { background: var(--bad); color: var(--fg); border-color: var(--bad); }
+.kit-add, .pet-add { font-size: 12px; height: 28px; padding: 0 12px; }
+
 .scenario-yaml {
   display: flex;
   flex-direction: column;
@@ -387,31 +431,61 @@ h3 { font-size: 15px; }
   margin: 0; font-size: 13px; text-transform: uppercase;
   letter-spacing: 0.08em; color: var(--fg-dim); font-weight: 600;
 }
-.scenario-yaml-edit {
-  border: none; outline: none;
-  width: 100%;
-  min-height: 360px;
-  padding: 14px 16px;
+/* Overlay code editor: textarea with transparent text on top of a
+   highlighted <pre>, scroll-synced. Caret stays visible (caret-color),
+   textarea text itself is invisible so the only colour you see comes
+   from hljs spans behind it. */
+.code-editor {
+  position: relative;
   background: var(--bg-elev);
-  color: var(--fg);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 13px;
   line-height: 1.5;
-  resize: vertical;
   tab-size: 2;
+  min-height: 360px;
 }
-.scenario-yaml-pre {
+.code-editor-bg,
+.code-editor-input {
+  /* Geometry MUST match exactly so cursor position aligns with the
+     highlighted text underneath. */
   margin: 0;
   padding: 14px 16px;
-  background: var(--bg-elev);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  overflow: auto;
-  display: none;
+  font: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+  letter-spacing: 0;
+  width: 100%;
+  min-height: inherit;
 }
-.scenario-yaml.preview-mode .scenario-yaml-edit { display: none; }
-.scenario-yaml.preview-mode .scenario-yaml-pre { display: block; }
+.code-editor-bg {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  pointer-events: none;
+  background: transparent;
+}
+.code-editor-bg code {
+  background: transparent !important;
+  padding: 0 !important;
+  display: block;
+}
+.code-editor-input {
+  position: relative;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: vertical;
+  color: transparent;
+  caret-color: var(--fg);
+  /* Selection still needs a colour the user can see */
+  -webkit-text-fill-color: transparent;
+}
+.code-editor-input::selection {
+  background: rgba(238, 133, 74, 0.35);
+}
+.code-editor-input::-moz-selection {
+  background: rgba(238, 133, 74, 0.35);
+}
 
 .form-actions { margin-top: 18px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 .form-actions button.primary, .form-actions a {
