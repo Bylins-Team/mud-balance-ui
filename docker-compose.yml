@@ -29,7 +29,10 @@ services:
       MUD_SIM_BIN: /opt/mud-sim
       MUD_SIM_WORLD_DIR: /data/world
       RUNS_DIR: /data/runs
-      MUD_SIM_TIMEOUT_S: "120"
+      # 10 minutes -- big-world сценарии на 1000+ раундов с pets
+      # упирались в 120s. Если кто-то поставит 100k раундов и зальёт
+      # очередь -- здесь надо ограничивать иначе (rate-limit + cancel).
+      MUD_SIM_TIMEOUT_S: "600"
     networks:
       - gateway
     restart: unless-stopped
