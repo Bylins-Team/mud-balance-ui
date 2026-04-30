@@ -21,7 +21,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
 
-from . import meta as meta_mod
+from . import jobqueue, meta as meta_mod
 from . import runner, storage, world
 from .encoding import colour_to_html
 from flask import jsonify
@@ -76,23 +76,23 @@ def runs_create():
     if not yaml_text:
         return "scenario YAML is required", 400
 
-    handle = storage.new_run(current_app.config["RUNS_DIR"])
+    # Reject malformed YAML up-front so the run dir is never created --
+    # otherwise we'd queue a guaranteed-failed job. Validation lives inside
+    # runner._normalize_scenario; replicate the structural checks here.
     try:
-        ok, _stderr = runner.run_scenario(
-            yaml_text,
-            handle,
-            mud_sim_bin=current_app.config["MUD_SIM_BIN"],
-            world_dir=current_app.config["MUD_SIM_WORLD_DIR"],
-            timeout_s=current_app.config["MUD_SIM_TIMEOUT_S"],
-        )
+        runner._normalize_scenario(yaml_text, Path("/tmp/x.jsonl"))  # noqa: SLF001
     except runner.ScenarioInvalidError as e:
-        # Roll back the run dir so it does not show up in the list.
-        shutil.rmtree(handle.root, ignore_errors=True)
         return f"scenario invalid: {e}", 400
 
-    summary = meta_mod.summarize(handle.events_path, yaml_text)
-    summary["status"] = "ok" if ok else "failed"
-    storage.write_meta(handle, summary)
+    handle = storage.new_run(current_app.config["RUNS_DIR"])
+    jobqueue.submit(
+        handle, yaml_text,
+        mud_sim_bin=current_app.config["MUD_SIM_BIN"],
+        world_dir=current_app.config["MUD_SIM_WORLD_DIR"],
+        timeout_s=current_app.config["MUD_SIM_TIMEOUT_S"],
+    )
+    # Redirect immediately. Viewer polls meta.json status until 'ok' /
+    # 'failed' / 'timeout' and re-renders.
     return redirect(url_for("ui.run_view", run_id=handle.run_id))
 
 
@@ -101,16 +101,34 @@ def run_view(run_id: str):
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
     if handle is None:
         abort(404)
-    # Start at round=-1 so the viewer opens on the pre-fight snapshot
-    # (slider left edge). Older `?t=` query strings are not migrated --
-    # the viewer was the only consumer of them.
+    meta = storage.load_meta(handle)
+    status = meta.get("status", "unknown")
+    if status in ("queued", "running"):
+        # Render a waiting page that polls /runs/<id>/status; once the job
+        # finishes the page reloads into the full viewer.
+        return render_template("run_pending.html", handle=handle, meta=meta)
     return render_template(
         "run_view.html",
         handle=handle,
-        meta=storage.load_meta(handle),
+        meta=meta,
         initial_round=request.args.get("round", "-1"),
         initial_role=request.args.get("role", "attacker"),
     )
+
+
+@bp.route("/runs/<run_id>/status")
+def run_status(run_id: str):
+    """Tiny JSON endpoint the pending page polls every second."""
+    handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
+    if handle is None:
+        abort(404)
+    meta = storage.load_meta(handle)
+    return jsonify({
+        "status": meta.get("status", "unknown"),
+        "queued_at": meta.get("queued_at"),
+        "started_at": meta.get("started_at"),
+        "finished_at": meta.get("finished_at"),
+    })
 
 
 @bp.route("/runs/<run_id>/events.jsonl")

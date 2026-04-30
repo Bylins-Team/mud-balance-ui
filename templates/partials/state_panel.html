@@ -26,10 +26,9 @@
 {% set base = snapshot.get(key ~ '_base') %}
 <div class="stat" title="{% if base is not none and base != eff %}база {{ base }} + апплаи{% else %}база{% endif %}">
   <span class="stat-label">{{ label }}</span>
-  <span class="stat-value">{{ eff if eff is not none else '?' }}</span>
-  {% if base is not none and eff is not none and base != eff %}
-  <span class="stat-diff">{% if eff > base %}+{{ eff - base }}{% else %}{{ eff - base }}{% endif %}</span>
-  {% endif %}
+  <span class="stat-value">
+    {{ eff if eff is not none else '?' }}{% if base is not none and eff is not none and base != eff %}<span class="stat-diff{% if eff < base %} negative{% endif %}">{% if eff > base %}+{{ eff - base }}{% else %}{{ eff - base }}{% endif %}</span>{% endif %}
+  </span>
 </div>
 {% endmacro %}
 <section class="state-section">

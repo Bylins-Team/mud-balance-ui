@@ -199,8 +199,10 @@ h3 { font-size: 15px; }
   transition: transform 0.1s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 .run-card:hover { border-color: #3a414a; box-shadow: var(--shadow); transform: translateY(-1px); }
-.run-card.status-failed { border-left: 3px solid var(--bad); }
-.run-card.status-ok     { border-left: 3px solid var(--good); }
+.run-card.status-failed  { border-left: 3px solid var(--bad); }
+.run-card.status-ok      { border-left: 3px solid var(--good); }
+.run-card.status-running { border-left: 3px solid var(--accent); }
+.run-card.status-queued  { border-left: 3px solid var(--fg-mute); }
 .card-link { display: block; padding: 14px 16px; color: var(--fg); }
 .card-link:hover { text-decoration: none; }
 .run-card h3 {
@@ -209,6 +211,19 @@ h3 { font-size: 15px; }
   font-size: 14px; font-weight: 600;
 }
 .run-card h3 small { color: var(--fg-dim); font-weight: 400; font-size: 0.9em; }
+.card-badge {
+  display: inline-block;
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: ui-sans-serif, sans-serif;
+}
+.badge-queued  { background: rgba(130,138,150,.18); color: var(--fg-dim); }
+.badge-running { background: var(--accent-soft); color: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.badge-failed  { background: rgba(217,103,100,.18); color: var(--bad); }
+@keyframes pulse { 50% { opacity: 0.5; } }
 .run-card dl {
   display: grid; grid-template-columns: auto 1fr;
   gap: 2px 12px;
@@ -558,6 +573,34 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   margin: 0;
   flex-wrap: wrap;
 }
+/* Pending / running state -- shown while mud-sim subprocess is still
+   executing. The page polls /runs/<id>/status every second and reloads
+   into the real viewer when the job finishes. */
+.pending-card {
+  background: var(--panel);
+  border: 1px solid var(--panel-edge);
+  border-left: 3px solid var(--info);
+  border-radius: var(--radius);
+  padding: 32px 28px;
+  text-align: center;
+  max-width: 600px;
+  margin: 32px auto;
+}
+.pending-card.status-queued { border-left-color: var(--fg-mute); }
+.pending-card.status-running { border-left-color: var(--accent); }
+.pending-card h2 { margin: 16px 0 8px; font-size: 18px; color: var(--fg); text-transform: none; letter-spacing: 0; }
+.pending-card .hint { color: var(--fg-dim); font-size: 13px; margin: 0 0 24px; }
+.pending-card .scenario-source { text-align: left; margin-top: 24px; }
+.spinner {
+  width: 40px; height: 40px;
+  margin: 0 auto;
+  border: 3px solid var(--panel-edge);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 .run-stats > div { display: flex; flex-direction: column; gap: 1px; }
 .run-stats dt { color: var(--fg-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
 .run-stats dd { margin: 0; font-variant-numeric: tabular-nums; font-size: 18px; font-weight: 500; color: var(--fg); }
@@ -648,21 +691,27 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   text-align: center;
 }
 .stat-row .stat {
-  display: flex; flex-direction: column; gap: 1px;
+  display: flex; flex-direction: column; gap: 2px;
   padding: 6px 4px;
   background: var(--bg-elev);
   border-radius: 4px;
-  position: relative;
 }
 .stat-row .stat-label { font-size: 10px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.05em; }
-.stat-row .stat-value { font-variant-numeric: tabular-nums; font-weight: 500; font-size: 14px; }
-.stat-row .stat-diff {
-  position: absolute;
-  top: 4px; right: 4px;
-  font-size: 9px;
-  color: var(--good);
+.stat-row .stat-value {
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
 }
+.stat-row .stat-diff {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--good);
+}
+.stat-row .stat-diff.negative { color: var(--bad); }
 .aff-list, .feat-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px; }
 .aff-list li, .feat-list li {
   background: var(--bg-elev); padding: 2px 8px;

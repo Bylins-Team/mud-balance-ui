@@ -9,9 +9,16 @@
 <ul class="run-grid">
   {% for r in runs %}
   {% set m = r.meta %}
-  <li class="run-card status-{{ m.get('status', 'unknown') }}">
+  {% set s = m.get('status', 'unknown') %}
+  <li class="run-card status-{{ s }}">
     <a class="card-link" href="{{ url_for('ui.run_view', run_id=r.handle.run_id) }}">
-      <h3>{{ m.get('attacker', '?') }} <small>vs</small> {{ m.get('victim', '?') }}</h3>
+      <h3>
+        {{ m.get('attacker', '?') }} <small>vs</small> {{ m.get('victim', '?') }}
+        {% if s == 'queued' %}<span class="card-badge badge-queued">в очереди</span>
+        {% elif s == 'running' %}<span class="card-badge badge-running">⏳ выполняется</span>
+        {% elif s == 'failed' %}<span class="card-badge badge-failed">упал</span>
+        {% endif %}
+      </h3>
       <dl>
         <dt>dpr</dt><dd>{{ m.get('dpr', 0) }}</dd>
         <dt>hit rate</dt><dd>{{ m.get('hit_rate_pct', 0) }}%</dd>

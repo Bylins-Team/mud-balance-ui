@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}В очереди — mud-balance-ui{% endblock %}
+{% block content %}
+<header class="run-header">
+  <div class="run-header-main">
+    <h1>Прогон <code>{{ handle.run_id }}</code></h1>
+    <a class="back-link" href="{{ url_for('ui.runs_list') }}">← все прогоны</a>
+  </div>
+</header>
+
+<div class="pending-card status-{{ meta.get('status', 'queued') }}" id="pending"
+     data-run-id="{{ handle.run_id }}">
+  <div class="spinner"></div>
+  <h2 id="pending-status">
+    {% if meta.status == 'queued' %}В очереди…{% else %}mud-sim запущен, ждём…{% endif %}
+  </h2>
+  <p class="hint" id="pending-hint">
+    Большой мир + длинные сценарии могут занимать до минуты. Страница
+    обновится сама, как только прогон завершится.
+  </p>
+  <details class="scenario-source">
+    <summary>YAML сценария</summary>
+    <pre><code class="language-yaml">{{ meta.get('scenario_yaml', '') }}</code></pre>
+  </details>
+</div>
+
+<link rel="stylesheet" href="{{ url_for('static', filename='highlight.min.css') }}">
+<script src="{{ url_for('static', filename='highlight.min.js') }}"></script>
+<script src="{{ url_for('static', filename='highlight-yaml.min.js') }}"></script>
+<script>
+(function () {
+  if (window.hljs) {
+    document.querySelectorAll('pre code.language-yaml').forEach(el => hljs.highlightElement(el));
+  }
+  const runId = document.getElementById('pending').dataset.runId;
+  const statusEl = document.getElementById('pending-status');
+  let attempts = 0;
+
+  async function poll() {
+    attempts++;
+    try {
+      const r = await fetch(`/runs/${runId}/status`, {credentials: 'include'});
+      if (!r.ok) throw new Error(r.statusText);
+      const data = await r.json();
+      if (data.status === 'queued') {
+        statusEl.textContent = 'В очереди…';
+      } else if (data.status === 'running') {
+        const elapsed = data.started_at ? Math.floor(Date.now()/1000 - data.started_at) : 0;
+        statusEl.textContent = `mud-sim работает (${elapsed}s)…`;
+      } else {
+        // ok / failed / timeout / unknown -- reload into the real viewer.
+        location.reload();
+        return;
+      }
+    } catch (_) { /* swallow transient blips */ }
+    setTimeout(poll, 1000);
+  }
+  poll();
+})();
+</script>
+{% endblock %}
