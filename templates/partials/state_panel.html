@@ -68,15 +68,6 @@
   </dl>
 </section>
 
-{% set fl = (snapshot.get('flags_list') or '').split('|') | reject('equalto', '') | list %}
-{% if fl %}
-<section class="state-section">
-  <h4>Активные флаги ({{ fl|length }})</h4>
-  <ul class="aff-list">
-    {% for f in fl %}<li class="active">{{ f }}</li>{% endfor %}
-  </ul>
-</section>
-{% endif %}
 
 {% set equip = (snapshot.get('equip_list') or '').split('|') | reject('equalto', '') | list %}
 {% if equip %}
@@ -107,22 +98,35 @@
 </section>
 {% endif %}
 
-{% set affs = (snapshot.get('affects_list') or '').split('|') | reject('equalto', '') | list %}
+{# Объединённая секция "Аффекты" -- то же что показывает команда "аффекты"
+   в игре. В JSONL приходят два разных списка:
+     affects_list -- ch->affected[] (временные spell-эффекты с duration)
+     flags_list   -- AFF_FLAGS(ch) (все активные флаги, включая permanent
+                     от шмота: ускорение, каменные руки, дыхание под водой)
+   Здесь склеиваем в один chip-list, у временных рядом с именем -- (Nt). #}
+{% set spell_affs = (snapshot.get('affects_list') or '').split('|') | reject('equalto', '') | list %}
+{% set flag_affs  = (snapshot.get('flags_list') or '').split('|') | reject('equalto', '') | list %}
+{% set total = (spell_affs|length) + (flag_affs|length) %}
 <section class="state-section">
-  <h4>Аффекты ({{ snapshot.affects_count }})</h4>
-  {% if affs %}
+  <h4>Аффекты ({{ total }})</h4>
+  {% if total %}
   <ul class="aff-list">
-    {% for a in affs %}<li>{{ a }}</li>{% endfor %}
-  </ul>
-  {% else %}
-  <ul class="aff-list">
-    {% if snapshot.aff_silence %}<li class="active">silence</li>{% endif %}
-    {% if snapshot.aff_charmed %}<li class="active">charmed</li>{% endif %}
-    {% if snapshot.aff_sleep %}<li class="active">sleep</li>{% endif %}
-    {% if not snapshot.aff_silence and not snapshot.aff_charmed and not snapshot.aff_sleep %}
-    <li class="empty">пусто</li>
+    {% for a in spell_affs %}
+      {# `name (Nt)` -- duration in pulses, чип с маркером "временный" #}
+      <li title="временный (spell-affect)">{{ a }}</li>
+    {% endfor %}
+    {% for f in flag_affs %}
+      <li class="aff-permanent" title="постоянный (от шмота)">{{ f }}</li>
+    {% endfor %}
+    {% if snapshot.aff_silence and 'silence' not in (snapshot.get('flags_list') or '').lower() %}
+      <li class="warn" title="блокирует магию">silence</li>
+    {% endif %}
+    {% if snapshot.aff_charmed and 'charmed' not in (snapshot.get('flags_list') or '').lower() %}
+      <li class="warn" title="charmed">charmed</li>
     {% endif %}
   </ul>
+  {% else %}
+  <p class="empty">пусто</p>
   {% endif %}
 </section>
 {% else %}

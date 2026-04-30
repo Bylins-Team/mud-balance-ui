@@ -744,6 +744,19 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   border: 1px solid var(--panel-edge-soft);
 }
 .aff-list li.active { color: var(--warn); border-color: var(--warn); }
+/* "Permanent" affects come from worn equipment / passive sources -- they
+   don't have a duration to show. Visually distinct from spell-affects via
+   a left-side accent dot. */
+.aff-list li.aff-permanent {
+  color: var(--accent);
+  border-color: rgba(238, 133, 74, 0.4);
+}
+.aff-list li.aff-permanent::before {
+  content: "•";
+  margin-right: 4px;
+  color: var(--accent);
+}
+.aff-list li.warn { color: var(--warn); border-color: var(--warn); }
 
 .identity-card {
   background: var(--bg-elev);
