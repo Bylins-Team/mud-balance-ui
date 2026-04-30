@@ -14,6 +14,10 @@
   <h2 id="pending-status">
     {% if meta.status == 'queued' %}В очереди…{% else %}mud-sim запущен, ждём…{% endif %}
   </h2>
+  <div class="progress-bar" id="pending-progress" hidden>
+    <div class="progress-fill" id="progress-fill"></div>
+    <span class="progress-text" id="progress-text"></span>
+  </div>
   <p class="hint" id="pending-hint">
     Большой мир + длинные сценарии могут занимать до минуты. Страница
     обновится сама, как только прогон завершится.
@@ -46,7 +50,29 @@
         statusEl.textContent = 'В очереди…';
       } else if (data.status === 'running') {
         const elapsed = data.started_at ? Math.floor(Date.now()/1000 - data.started_at) : 0;
-        statusEl.textContent = `mud-sim работает (${elapsed}s)…`;
+        let head = `mud-sim работает (${elapsed}s)`;
+        if (data.rounds_done > 0 && !data.rounds_target) {
+          // Older runs without target_rounds: at least show pulse.
+          head += ` · ${data.rounds_done} раундов сделано`;
+        }
+        statusEl.textContent = head + '…';
+        if (data.rounds_target > 0) {
+          const bar = document.getElementById('pending-progress');
+          const fill = document.getElementById('progress-fill');
+          const text = document.getElementById('progress-text');
+          bar.hidden = false;
+          const pct = Math.min(100, Math.round(100 * data.rounds_done / data.rounds_target));
+          fill.style.width = pct + '%';
+          let etaTxt = '';
+          if (data.rounds_done > 0 && elapsed > 0) {
+            const rate = data.rounds_done / elapsed;
+            const remaining = (data.rounds_target - data.rounds_done) / rate;
+            if (isFinite(remaining) && remaining > 0) {
+              etaTxt = ` · осталось ~${Math.ceil(remaining)}s`;
+            }
+          }
+          text.textContent = `${data.rounds_done} / ${data.rounds_target} раундов (${pct}%)${etaTxt}`;
+        }
       } else {
         // ok / failed / timeout / unknown -- reload into the real viewer.
         location.reload();

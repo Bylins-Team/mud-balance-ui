@@ -118,16 +118,31 @@ def run_view(run_id: str):
 
 @bp.route("/runs/<run_id>/status")
 def run_status(run_id: str):
-    """Tiny JSON endpoint the pending page polls every second."""
+    """Tiny JSON endpoint the pending page polls every second.
+
+    Progress: count `round` events in events.jsonl on the fly (mud-sim
+    appends one per pulse_violence). Cheap -- one byte-grep per poll.
+    """
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
     if handle is None:
         abort(404)
     meta = storage.load_meta(handle)
+    target = int(meta.get("target_rounds") or 0)
+    done = 0
+    if handle.events_path.is_file():
+        with handle.events_path.open("rb") as fh:
+            for line in fh:
+                # Quick substring check; the field is fixed-position
+                # near the start of every event, so no JSON parse needed.
+                if b'"name":"round"' in line:
+                    done += 1
     return jsonify({
         "status": meta.get("status", "unknown"),
         "queued_at": meta.get("queued_at"),
         "started_at": meta.get("started_at"),
         "finished_at": meta.get("finished_at"),
+        "rounds_done": done,
+        "rounds_target": target,
     })
 
 

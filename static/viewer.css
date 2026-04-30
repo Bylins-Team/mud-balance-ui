@@ -615,6 +615,33 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
 .pending-card.status-running { border-left-color: var(--accent); }
 .pending-card h2 { margin: 16px 0 8px; font-size: 18px; color: var(--fg); text-transform: none; letter-spacing: 0; }
 .pending-card .hint { color: var(--fg-dim); font-size: 13px; margin: 0 0 24px; }
+.progress-bar {
+  position: relative;
+  width: 100%;
+  height: 22px;
+  background: var(--bg-elev);
+  border: 1px solid var(--panel-edge);
+  border-radius: 11px;
+  margin: 12px 0 16px;
+  overflow: hidden;
+}
+.progress-fill {
+  position: absolute; inset: 0 auto 0 0;
+  width: 0;
+  background: linear-gradient(90deg, var(--accent), #f4a874);
+  transition: width 0.4s ease;
+}
+.progress-text {
+  position: relative;
+  display: block;
+  text-align: center;
+  line-height: 22px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+}
 .pending-card .scenario-source { text-align: left; margin-top: 24px; }
 .spinner {
   width: 40px; height: 40px;
@@ -698,9 +725,18 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
    chart grows infinitely. Wrap canvas in a fixed-height div. */
 .chart-card .chart-wrap {
   position: relative;
-  height: 240px;
+  height: 280px;
 }
 .chart-card canvas { display: block; }
+.chart-card .chart-hint {
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: var(--fg-mute);
+  font-style: italic;
+}
+/* Single-chart aналитика: full row для объединённого breakdown'а. */
+.analytics-grid .chart-wide { grid-column: 1 / -1; }
+.analytics-grid .chart-wide .chart-wrap { height: 340px; }
 
 /* viewer layout: 3 columns + bottom timeline. Computed-grid heights. */
 .viewer { display: flex; flex-direction: column; gap: 12px; }

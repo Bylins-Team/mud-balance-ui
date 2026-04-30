@@ -33,17 +33,10 @@
 <details class="analytics" id="analytics-pane" data-run-id="{{ handle.run_id }}">
   <summary>Аналитика</summary>
   <div class="analytics-grid">
-    <div class="chart-card">
-      <h3>Урон, нанесённый жертве</h3>
-      <div class="chart-wrap"><canvas id="chart-hp"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>Урон по раундам (источник)</h3>
+    <div class="chart-card chart-wide">
+      <h3>Урон по раундам — источник + кумулятив</h3>
+      <p class="chart-hint">Stacked area: per-round урон от melee хозяина / spell хозяина / pets. Линия — кумулятивный урон (правая ось).</p>
       <div class="chart-wrap"><canvas id="chart-breakdown"></canvas></div>
-    </div>
-    <div class="chart-card">
-      <h3>Кумулятивный урон</h3>
-      <div class="chart-wrap"><canvas id="chart-cumulative"></canvas></div>
     </div>
   </div>
 </details>
@@ -143,24 +136,8 @@
       },
     };
 
-    // ----- 1. Урон, понесённый жертвой (max - hp).
-    // Голый HP бесполезен когда max = 5e8: изменения в тысячи теряются.
-    // Считаем damage_taken = max_hp - hp_victim_after_round.
-    const hpMax = data.hp_victim.length ? Math.max(...data.hp_victim) : 0;
-    const damageTaken = data.hp_victim.map(hp => hpMax - hp);
-    new Chart(document.getElementById('chart-hp'), {
-      type: 'line',
-      data: { labels: data.labels, datasets: [{
-        label: 'урон, нанесённый жертве', data: damageTaken,
-        borderColor: info, backgroundColor: 'rgba(95,173,234,0.15)',
-        fill: true, tension: 0.2, pointRadius: 0, pointHoverRadius: 4,
-      }]},
-      options: common,
-    });
-
-    // ----- 2. Breakdown: stacked area для длинных прогонов, иначе bar.
-    // На 500 раундах столбики превращаются в сплошную кашу пиксель в
-    // ширину; area сглаживает и сразу видна тенденция.
+    // На длинных прогонах bar превращается в кашу шириной в пиксель,
+    // используем stacked area; на коротких -- bar читается лучше.
     const useArea = data.labels.length > 60;
     new Chart(document.getElementById('chart-breakdown'), {
       type: useArea ? 'line' : 'bar',
@@ -171,7 +148,7 @@
           borderColor: info,
           fill: useArea ? 'origin' : false,
           tension: 0.2, pointRadius: 0,
-          stack: 'd',
+          stack: 'd', yAxisID: 'y',
         },
         {
           label: 'spell хозяина', data: data.damage_breakdown.master_spell,
@@ -179,7 +156,7 @@
           borderColor: accent,
           fill: useArea ? '-1' : false,
           tension: 0.2, pointRadius: 0,
-          stack: 'd',
+          stack: 'd', yAxisID: 'y',
         },
         {
           label: 'pets', data: data.damage_breakdown.pets,
@@ -187,7 +164,20 @@
           borderColor: good,
           fill: useArea ? '-1' : false,
           tension: 0.2, pointRadius: 0,
-          stack: 'd',
+          stack: 'd', yAxisID: 'y',
+        },
+        {
+          // Cumulative line on the right Y axis -- separate scale so
+          // it doesn't squash per-round bars to nothing.
+          type: 'line',
+          label: 'итого с начала боя',
+          data: data.cumulative,
+          borderColor: '#d4d8df',
+          borderDash: [4, 3],
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.1, pointRadius: 0, pointHoverRadius: 4,
+          yAxisID: 'y2',
         },
       ]},
       options: { ...common,
@@ -195,28 +185,31 @@
           ...common.plugins,
           tooltip: {
             ...sharedInteraction,
-            // Сводный итог в footer'е tooltip'а: total = melee + spell + pets.
             callbacks: {
-              footer: (items) => 'итого: ' + items.reduce((s, it) => s + (it.parsed.y || 0), 0),
+              footer: (items) => {
+                const perRound = items
+                  .filter(it => it.dataset.yAxisID === 'y')
+                  .reduce((s, it) => s + (it.parsed.y || 0), 0);
+                return 'за раунд: ' + perRound;
+              },
             },
           },
         },
         scales: {
           x: { ...common.scales.x, stacked: true },
-          y: { ...common.scales.y, stacked: true },
+          y: {
+            ...common.scales.y, stacked: true, position: 'left',
+            title: { display: true, text: 'урон/раунд', color: tickColor },
+          },
+          y2: {
+            position: 'right',
+            beginAtZero: true,
+            grid: { drawOnChartArea: false },
+            ticks: { color: tickColor },
+            title: { display: true, text: 'итого', color: tickColor },
+          },
         },
       },
-    });
-
-    // ----- 3. Кумулятивный урон.
-    new Chart(document.getElementById('chart-cumulative'), {
-      type: 'line',
-      data: { labels: data.labels, datasets: [{
-        label: 'суммарный урон', data: data.cumulative,
-        borderColor: accent, backgroundColor: 'rgba(238,133,74,0.18)',
-        fill: true, tension: 0.1, pointRadius: 0, pointHoverRadius: 4,
-      }]},
-      options: common,
     });
   });
 })();

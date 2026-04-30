@@ -43,10 +43,14 @@ def submit(
 ) -> None:
     """Enqueue a run. Returns immediately. Status flips to 'queued', then
     'running' when a worker picks it up, then 'ok'/'failed'/'timeout'."""
+    # Stash the scenario `rounds:` so /status can report progress as
+    # "N/total" without re-parsing YAML on every poll.
+    target_rounds = _extract_target_rounds(yaml_text_utf8)
     initial = {
         "status": "queued",
         "scenario_yaml": yaml_text_utf8,
         "queued_at": time.time(),
+        "target_rounds": target_rounds,
     }
     storage.write_meta(handle, initial)
 
@@ -55,6 +59,15 @@ def submit(
         handle, yaml_text_utf8,
         mud_sim_bin, world_dir, timeout_s,
     )
+
+
+def _extract_target_rounds(yaml_text: str) -> int:
+    """Cheap regex pull of `rounds:` so we can report progress without
+    a real YAML parse on every status poll. Default to 100 if absent
+    (matches mud-sim's own default)."""
+    import re
+    m = re.search(r"^\s*rounds\s*:\s*(\d+)", yaml_text, re.MULTILINE)
+    return int(m.group(1)) if m else 100
 
 
 def _execute_job(
@@ -72,6 +85,7 @@ def _execute_job(
         "status": "running",
         "scenario_yaml": yaml_text_utf8,
         "started_at": started_at,
+        "target_rounds": _extract_target_rounds(yaml_text_utf8),
     })
 
     try:
