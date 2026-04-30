@@ -128,8 +128,12 @@ def api_log(run_id: str):
     handle, round_no = _resolve_handle_and_round(run_id)
     cutoff_ms = _round_ts_cutoff(storage.load_meta(handle), round_no)
     entries = []
+    # round=-1 -> pre-fight, no events yet. cutoff_ms==0 means "before any
+    # `round` event was emitted", so we filter everything out.
+    if cutoff_ms == 0:
+        return render_template("partials/log_panel.html", entries=entries)
     for ev in _iter_events(handle.events_path):
-        if cutoff_ms and int(ev.get("ts", 0)) > cutoff_ms:
+        if int(ev.get("ts", 0)) > cutoff_ms:
             break
         name = ev.get("name")
         if name == "damage":

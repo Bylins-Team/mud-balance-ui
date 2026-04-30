@@ -1,5 +1,24 @@
 {% if snapshot %}
-{# Stats: only render if at least one is present (older mud-sim builds may not emit them). #}
+{# Identity: PC vs NPC. Older runs may lack is_npc; fall back to target_name. #}
+{% if snapshot.get('is_npc') is not none %}
+<section class="state-section identity-card identity-{{ 'npc' if snapshot.is_npc else 'pc' }}">
+  <h4>
+    {% if snapshot.is_npc %}
+      моб <span class="ident-vnum">#{{ snapshot.vnum }}</span>
+    {% else %}
+      игрок
+    {% endif %}
+  </h4>
+  <div class="ident-name">
+    {% if snapshot.is_npc %}
+      {{ snapshot.short_descr or snapshot.target_name }}
+    {% else %}
+      {{ snapshot.target_name }}{% if snapshot.class_name %}, {{ snapshot.class_name }}{% endif %} <span class="ident-lvl">lvl {{ snapshot.level }}</span>
+    {% endif %}
+  </div>
+</section>
+{% endif %}
+
 {% set has_stats = snapshot.get('str') is not none or snapshot.get('dex') is not none %}
 {% if has_stats %}
 <section class="state-section">
@@ -31,6 +50,25 @@
     <dt>physdam +</dt><dd>{{ snapshot.physdam_add_pct }}%</dd>
   </dl>
 </section>
+
+{% set equip = (snapshot.get('equip_list') or '').split('|') | reject('equalto', '') | list %}
+{% if equip %}
+<section class="state-section">
+  <h4>Экипировка ({{ equip|length }})</h4>
+  <ul class="equip-list">
+    {% for e in equip %}
+    {% set parts = e.split(':', 2) %}
+    {% if parts|length == 3 %}
+    <li>
+      <span class="equip-slot">{{ parts[0] }}</span>
+      <span class="equip-name">{{ parts[2] }}</span>
+      <span class="equip-vnum">#{{ parts[1] }}</span>
+    </li>
+    {% endif %}
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
 
 {% set feats = (snapshot.get('feats_list') or '').split('|') | reject('equalto', '') | reject('equalto', '!undefined!') | list %}
 {% if feats %}
