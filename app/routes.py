@@ -16,6 +16,7 @@ Routes:
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
@@ -63,10 +64,8 @@ def runs_create():
             timeout_s=current_app.config["MUD_SIM_TIMEOUT_S"],
         )
     except runner.ScenarioInvalidError as e:
-        # Roll back the empty run dir so it does not show up in the list.
-        for p in handle.root.glob("*"):
-            p.unlink()
-        handle.root.rmdir()
+        # Roll back the run dir so it does not show up in the list.
+        shutil.rmtree(handle.root, ignore_errors=True)
         return f"scenario invalid: {e}", 400
 
     summary = meta_mod.summarize(handle.events_path, yaml_text)
@@ -185,9 +184,9 @@ def run_delete(run_id: str):
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
     if handle is None:
         abort(404)
-    for p in handle.root.glob("*"):
-        p.unlink()
-    handle.root.rmdir()
+    # mud-sim drops `log/` subdir inside the run dir for syslog/errlog,
+    # so we need a recursive remove rather than per-file unlink.
+    shutil.rmtree(handle.root)
     return redirect(url_for("ui.runs_list"))
 
 
