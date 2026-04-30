@@ -89,7 +89,7 @@ def _execute_job(
     })
 
     try:
-        ok, _stderr = runner.run_scenario(
+        ok, stderr_text = runner.run_scenario(
             yaml_text_utf8, handle,
             mud_sim_bin=mud_sim_bin,
             world_dir=world_dir,
@@ -110,6 +110,10 @@ def _execute_job(
     summary["status"] = "ok" if ok else "failed"
     summary["started_at"] = started_at
     summary["finished_at"] = time.time()
+    if not ok:
+        # First line of stderr usually carries the actual cause
+        # (timeout / crash / unknown class / etc.).
+        summary["error"] = (stderr_text or "").strip().splitlines()[0] if stderr_text else "mud-sim exited non-zero"
     storage.write_meta(handle, summary)
 
 

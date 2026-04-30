@@ -683,6 +683,19 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   background: var(--bg-elev);
 }
 
+.run-error {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: rgba(217,103,100,0.08);
+  border: 1px solid var(--bad);
+  border-left: 3px solid var(--bad);
+  border-radius: var(--radius);
+  color: var(--fg);
+  font-size: 13px;
+}
+.run-error strong { color: var(--bad); }
+.run-error .hint { margin: 6px 0 0; color: var(--fg-dim); font-size: 12px; }
+
 /* Analytics fold -- charts of HP / damage breakdown / cumulative damage.
    Same <details> visual as scenario-source for consistency. */
 .analytics {

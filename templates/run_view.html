@@ -22,6 +22,15 @@
   </dl>
 </header>
 
+{% if meta.get('status') == 'failed' and meta.get('error') %}
+<div class="run-error">
+  <strong>Прогон упал:</strong> {{ meta.error }}
+  {% if meta.error.startswith('mud-sim timed out') %}
+  <p class="hint">MUD_SIM_TIMEOUT_S задаётся в docker-compose.yml. Поднимите для длинных сценариев.</p>
+  {% endif %}
+</div>
+{% endif %}
+
 {% set total_rounds = meta.get('rounds', 0) %}
 {% set max_round = total_rounds - 1 if total_rounds > 0 else 0 %}
 
