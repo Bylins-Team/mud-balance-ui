@@ -1,24 +1,31 @@
 # syntax=docker/dockerfile:1.6
-# Multi-stage Dockerfile: stage `build` compiles mud-sim from the bylins/mud
-# submodule, stage `runtime` runs the Flask UI with the prebuilt binary and
-# a prepared world.
-ARG MUD_SUBMODULE_PATH=mud
+# Multi-stage Dockerfile: stage `build` clones mud at MUD_REF and compiles
+# mud-sim; stage `runtime` runs the Flask UI with the prebuilt binary and a
+# prepared world. We clone in the builder rather than COPY'ing the submodule
+# from the host because git submodule pointers don't survive a plain COPY
+# (cmake's changelog target then can't resolve `git rev-parse` on submodules).
+ARG MUD_REPO=https://github.com/Bylins-Team/mud.git
+ARG MUD_REF=claude/vibrant-raman-695d14
 
 # ----------------------------------------------------------------------
 # Stage 1: build mud-sim + prepare the small/ world
 # ----------------------------------------------------------------------
 FROM ubuntu:24.04 AS build
 
+# Re-declare ARGs after FROM (per Docker spec they reset across stages).
+ARG MUD_REPO
+ARG MUD_REF
+
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake git gettext python3 python3-pip python3-ruamel.yaml \
     libssl-dev libcurl4-gnutls-dev libexpat1-dev libgtest-dev libyaml-cpp-dev \
-    zlib1g-dev libfmt-dev libnlohmann-json3-dev \
+    zlib1g-dev libfmt-dev nlohmann-json3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
-COPY ${MUD_SUBMODULE_PATH} /src/mud
+RUN git clone --recurse-submodules --depth 1 -b "${MUD_REF}" "${MUD_REPO}" mud
 WORKDIR /src/mud
 
 # Build mud-sim with YAML support (required for the simulator).
@@ -37,11 +44,22 @@ RUN mkdir -p /opt/small && \
 # ----------------------------------------------------------------------
 # Stage 2: runtime
 # ----------------------------------------------------------------------
-FROM python:3.12-slim AS runtime
+# Same base as `build` stage so glibc / libstdc++ / libfmt / libyaml-cpp
+# versions match the binary we copy in. Switching to python:slim would
+# require pinning all of those pkgs to compatible versions on a different
+# distro -- not worth the maintenance.
+FROM ubuntu:24.04 AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libyaml-cpp0.8 libfmt9 libcurl4 libexpat1 libssl3 zlib1g curl \
+    libyaml-cpp0.8 libfmt9 libcurl4t64 libexpat1 libssl3t64 zlib1g \
+    python3 python3-pip python3-venv curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# pip install -e .[prod] needs venv on Ubuntu 24.04 (PEP 668).
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
 
 # mud-sim binary + default world from stage build.
 COPY --from=build /src/mud/build_yaml/mud-sim /opt/mud-sim

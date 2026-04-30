@@ -5,8 +5,13 @@ services:
       dockerfile: Dockerfile
     image: mud-balance-ui:local
     container_name: mud-balance-ui
-    ports:
-      - "127.0.0.1:5001:5001"
+    # No host port: gateway reaches us via the shared `gateway` network by
+    # service hostname (mud-balance-ui:5001). Exposing on host would just
+    # add attack surface. For local dev without the gateway, uncomment:
+    # ports:
+    #   - "127.0.0.1:5001:5001"
+    expose:
+      - "5001"
     volumes:
       # Persistent run history. Survives container rebuilds.
       - ./runs:/data/runs
@@ -18,4 +23,11 @@ services:
       MUD_SIM_WORLD_DIR: /opt/small
       RUNS_DIR: /data/runs
       MUD_SIM_TIMEOUT_S: "120"
+    networks:
+      - gateway
     restart: unless-stopped
+
+networks:
+  gateway:
+    external: true
+    name: gateway
