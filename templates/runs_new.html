@@ -37,20 +37,9 @@
       <div class="field-row" data-show-when="_atk_type=player">
         <label for="atk_class">класс</label>
         <select id="atk_class" name="_atk_class">
-          <option value="bogatyr" selected>богатырь (bogatyr)</option>
-          <option value="naemnik">наёмник (naemnik)</option>
-          <option value="kudesnik">кудесник (kudesnik)</option>
-          <option value="koldun">колдун (koldun)</option>
-          <option value="lekar">лекарь (lekar)</option>
-          <option value="ohotnik">охотник (ohotnik)</option>
-          <option value="volkhv">волхв (volkhv)</option>
-          <option value="druzhinnik">дружинник (druzhinnik)</option>
-          <option value="kupets">купец (kupets)</option>
-          <option value="chernoknizhnik">чернокнижник (chernoknizhnik)</option>
-          <option value="vityaz">витязь (vityaz)</option>
-          <option value="tat">тать (tat)</option>
-          <option value="kuznets">кузнец (kuznets)</option>
-          <option value="volshebnik">волшебник (volshebnik)</option>
+          {% for k, label in pc_classes %}
+          <option value="{{ k }}"{% if loop.first %} selected{% endif %}>{{ label }} ({{ k }})</option>
+          {% endfor %}
         </select>
       </div>
       <div class="field-row" data-show-when="_atk_type=player">
@@ -113,10 +102,9 @@
       <div class="field-row" data-show-when="_vic_type=player">
         <label for="vic_class">класс</label>
         <select id="vic_class" name="_vic_class">
-          <option value="bogatyr">богатырь</option>
-          <option value="lekar">лекарь</option>
-          <option value="naemnik">наёмник</option>
-          <option value="koldun">колдун</option>
+          {% for k, label in pc_classes %}
+          <option value="{{ k }}">{{ label }} ({{ k }})</option>
+          {% endfor %}
         </select>
       </div>
       <div class="field-row" data-show-when="_vic_type=player">

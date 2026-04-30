@@ -42,11 +42,32 @@ def runs_list():
     return render_template("runs_list.html", runs=runs)
 
 
+# PC class options shown in the form. Order is from pc_classes.xml in the
+# engine. Both attacker and victim selectors render this -- single source
+# of truth so the two selects can't drift.
+PC_CLASSES = [
+    ("bogatyr",        "богатырь"),
+    ("naemnik",        "наёмник"),
+    ("kudesnik",       "кудесник"),
+    ("koldun",         "колдун"),
+    ("lekar",          "лекарь"),
+    ("ohotnik",        "охотник"),
+    ("volkhv",         "волхв"),
+    ("druzhinnik",     "дружинник"),
+    ("kupets",         "купец"),
+    ("chernoknizhnik", "чернокнижник"),
+    ("vityaz",         "витязь"),
+    ("tat",            "тать"),
+    ("kuznets",        "кузнец"),
+    ("volshebnik",     "волшебник"),
+]
+
+
 @bp.route("/runs/new", methods=["GET"])
 def runs_new():
     # The form generates its own YAML via JS from structured fields; no
     # server-side default needed.
-    return render_template("runs_new.html")
+    return render_template("runs_new.html", pc_classes=PC_CLASSES)
 
 
 @bp.route("/runs", methods=["POST"])
