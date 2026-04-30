@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ meta.get('attacker', '?') }} vs {{ meta.get('victim', '?') }} — mud-balance-ui{% endblock %}
+{% block content %}
+<header class="run-header">
+  <h1>{{ meta.get('attacker', '?') }} <small>vs</small> {{ meta.get('victim', '?') }}</h1>
+  <dl class="run-stats">
+    <dt>dpr</dt><dd>{{ meta.get('dpr', 0) }}</dd>
+    <dt>hit rate</dt><dd>{{ meta.get('hit_rate_pct', 0) }}%</dd>
+    <dt>раундов</dt><dd>{{ meta.get('rounds', 0) }}</dd>
+    <dt>статус</dt><dd>{{ meta.get('status', '?') }}</dd>
+  </dl>
+</header>
+
+{% set duration_ms = (meta.get('last_ts_ms') or 0) - (meta.get('first_ts_ms') or 0) %}
+{% set duration_s = (duration_ms / 1000) if duration_ms > 0 else 1 %}
+
+<section class="viewer"
+         data-run-id="{{ handle.run_id }}"
+         data-duration="{{ duration_s }}"
+         data-initial-t="{{ initial_t }}"
+         data-initial-role="{{ initial_role }}">
+  <aside class="viewer-roles">
+    <h2>Роль</h2>
+    <select id="role-select" name="role">
+      <option value="attacker"{% if initial_role == 'attacker' %} selected{% endif %}>attacker</option>
+      <option value="victim"{% if initial_role == 'victim' %} selected{% endif %}>victim</option>
+    </select>
+    <div id="state-panel" class="state-panel">{# loaded via HTMX on slider input #}</div>
+  </aside>
+
+  <section class="viewer-log">
+    <h2>Combat log</h2>
+    <div id="log-panel" class="log-panel"></div>
+  </section>
+
+  <section class="viewer-screen">
+    <h2>Screen output</h2>
+    <pre id="screen-panel" class="screen-panel"></pre>
+  </section>
+
+  <footer class="viewer-timeline">
+    <input type="range" id="time-slider"
+           min="0" max="{{ duration_s }}" step="0.1"
+           value="{{ initial_t }}">
+    <span id="time-display">{{ initial_t }}s / {{ '%.1f'|format(duration_s) }}s</span>
+  </footer>
+</section>
+
+<script>
+(function () {
+  const viewer = document.querySelector('.viewer');
+  const slider = document.getElementById('time-slider');
+  const display = document.getElementById('time-display');
+  const roleSelect = document.getElementById('role-select');
+  const runId = viewer.dataset.runId;
+  const duration = parseFloat(viewer.dataset.duration);
+
+  function refresh() {
+    const t = slider.value;
+    const role = roleSelect.value;
+    display.textContent = `${parseFloat(t).toFixed(1)}s / ${duration.toFixed(1)}s`;
+    const url = `/runs/${runId}/api`;
+    htmx.ajax('GET', `${url}/state?t=${t}&role=${role}`, '#state-panel');
+    htmx.ajax('GET', `${url}/log?t=${t}`, '#log-panel');
+    htmx.ajax('GET', `${url}/screen?t=${t}&role=${role}`, '#screen-panel');
+    history.replaceState({}, '', `?t=${t}&role=${role}`);
+  }
+
+  slider.addEventListener('input', refresh);
+  roleSelect.addEventListener('change', refresh);
+  // Wait for HTMX to finish loading, then trigger initial refresh.
+  document.addEventListener('htmx:load', refresh, { once: true });
+  // Fallback if htmx:load already fired.
+  if (window.htmx) refresh();
+})();
+</script>
+{% endblock %}

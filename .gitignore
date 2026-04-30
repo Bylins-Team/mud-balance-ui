@@ -1,0 +1,24 @@
+# Local prog
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Run artifacts (mounted as volume in Docker)
+runs/
+
+# Docker build cache
+.docker-build/
+
+# Static gateway upload artifacts
+*.png
+*.gif

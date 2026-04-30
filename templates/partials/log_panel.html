@@ -1,0 +1,12 @@
+{% if entries %}
+<ol class="log-list">
+  {% for e in entries %}
+  <li class="log-{{ e.kind }}">
+    <span class="log-ts">{{ e.ts }}</span>
+    <span class="log-text">{{ e.text }}</span>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="empty">Пока тишина.</p>
+{% endif %}

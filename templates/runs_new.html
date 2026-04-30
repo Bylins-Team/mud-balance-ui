@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Новый прогон — mud-balance-ui{% endblock %}
+{% block content %}
+<h1>Новый прогон</h1>
+
+<form method="post" action="{{ url_for('ui.runs_create') }}" class="scenario-form">
+  <p class="hint">
+    YAML-сценарий в формате mud-sim. Поле <code>output</code> игнорируется
+    (UI всегда подставляет свой путь). Запуск блокирует обработчик
+    до завершения симулятора (timeout 120 сек по умолчанию).
+  </p>
+
+  <label for="scenario">Сценарий</label>
+  <textarea name="scenario" id="scenario" rows="20" spellcheck="false">{{ default_yaml }}</textarea>
+
+  <div class="form-actions">
+    <button type="submit" class="primary">Запустить</button>
+    <a href="{{ url_for('ui.runs_list') }}">Отмена</a>
+  </div>
+</form>
+
+<details class="cheatsheet">
+  <summary>Шпаргалка по полям</summary>
+<pre>
+seed: 42                    # для воспроизводимости
+rounds: 50                  # сколько pulse_violence прокрутить
+attacker:
+  type: player              # или mob
+  class: bogatyr            # см. список алиасов в src/simulator/README.md
+  level: 30
+  stats: { wis: 80 }        # опц. перебивка статов
+  pets: [{ vnum: 4001 }]    # опц. чармисы / нежить
+  inventory: [111, 207]     # опц. стартовая экипировка по vnum
+victim:
+  type: mob
+  vnum: 102
+action:
+  type: cast                # или melee (по умолчанию)
+  spell: "&Y&qшаровая молния&n"
+</pre>
+</details>
+{% endblock %}

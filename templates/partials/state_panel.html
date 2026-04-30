@@ -1,0 +1,15 @@
+{% if snapshot %}
+<dl class="state-grid">
+  <dt>HP</dt><dd>{{ snapshot.hp }} / {{ snapshot.max_hp }}</dd>
+  <dt>move</dt><dd>{{ snapshot.move }} / {{ snapshot.max_move }}</dd>
+  <dt>position</dt><dd>{{ snapshot.position }}</dd>
+  <dt>spellpower +</dt><dd>{{ snapshot.spellpower_add_pct }}%</dd>
+  <dt>physdam +</dt><dd>{{ snapshot.physdam_add_pct }}%</dd>
+  <dt>аффектов</dt><dd>{{ snapshot.affects_count }}</dd>
+  {% if snapshot.aff_silence %}<dt>silence</dt><dd>да</dd>{% endif %}
+  {% if snapshot.aff_charmed %}<dt>charmed</dt><dd>да</dd>{% endif %}
+  {% if snapshot.aff_sleep %}<dt>sleep</dt><dd>да</dd>{% endif %}
+</dl>
+{% else %}
+<p class="empty">Нет данных для роли «{{ role }}» на этот момент.</p>
+{% endif %}

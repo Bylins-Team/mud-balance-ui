@@ -1,0 +1,21 @@
+services:
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mud-balance-ui:local
+    container_name: mud-balance-ui
+    ports:
+      - "127.0.0.1:5001:5001"
+    volumes:
+      # Persistent run history. Survives container rebuilds.
+      - ./runs:/data/runs
+      # Optional: mount your own prepared world read-only to override the
+      # default small/ baked into the image. Comment out to use the default.
+      # - ./world:/data/world:ro
+    environment:
+      MUD_SIM_BIN: /opt/mud-sim
+      MUD_SIM_WORLD_DIR: /opt/small
+      RUNS_DIR: /data/runs
+      MUD_SIM_TIMEOUT_S: "120"
+    restart: unless-stopped

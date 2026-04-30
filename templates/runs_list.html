@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Прогоны — mud-balance-ui{% endblock %}
+{% block content %}
+<h1>История прогонов</h1>
+
+{% if not runs %}
+  <p class="empty">Пока нет ни одного прогона. <a href="{{ url_for('ui.runs_new') }}">Создать первый</a>.</p>
+{% else %}
+<ul class="run-grid">
+  {% for r in runs %}
+  {% set m = r.meta %}
+  <li class="run-card status-{{ m.get('status', 'unknown') }}">
+    <a class="card-link" href="{{ url_for('ui.run_view', run_id=r.handle.run_id) }}">
+      <h3>{{ m.get('attacker', '?') }} <small>vs</small> {{ m.get('victim', '?') }}</h3>
+      <dl>
+        <dt>dpr</dt><dd>{{ m.get('dpr', 0) }}</dd>
+        <dt>hit rate</dt><dd>{{ m.get('hit_rate_pct', 0) }}%</dd>
+        <dt>раундов</dt><dd>{{ m.get('rounds', 0) }}</dd>
+        <dt>событий</dt><dd>{{ m.get('events_total', 0) }}</dd>
+      </dl>
+      <time datetime="{{ m.get('created_at', '') }}">{{ m.get('created_at', '')[:19] }}</time>
+    </a>
+    <form method="post" action="{{ url_for('ui.run_delete', run_id=r.handle.run_id) }}"
+          class="card-delete"
+          onsubmit="return confirm('Удалить прогон {{ r.handle.run_id }}?')">
+      <button type="submit" aria-label="Удалить">×</button>
+    </form>
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+{% endblock %}

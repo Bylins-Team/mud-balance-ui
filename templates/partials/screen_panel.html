@@ -1,0 +1,5 @@
+{% if chunks %}
+{% for c in chunks %}{{ c|safe }}{% endfor %}
+{% else %}
+<span class="empty">Здесь появится то, что увидел бы «{{ role }}» в telnet-клиенте.</span>
+{% endif %}
