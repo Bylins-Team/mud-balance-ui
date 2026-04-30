@@ -20,9 +20,11 @@ services:
       # Persistent run history. Survives container rebuilds.
       - ./runs:/data/runs
       # Big world (production-ish snapshot from ~/worlds/world.tgz),
-      # unpacked + converted to YAML once on the host. RO mount so
-      # mud-sim can't accidentally write to the world tree.
-      - ./world:/data/world:ro
+      # unpacked + converted to YAML once on the host. RW mount because
+      # mud-sim's save_char path writes to etc/players when a PC is
+      # extracted (idle, end-of-scenario). Stray writes are tolerable --
+      # the world tree is regeneratable from the source archive.
+      - ./world:/data/world
     environment:
       MUD_SIM_BIN: /opt/mud-sim
       MUD_SIM_WORLD_DIR: /data/world
