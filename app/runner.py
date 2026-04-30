@@ -68,11 +68,17 @@ def run_scenario(
     # mud-sim wants KOI8-R. Convert in Python so we don't shell out to iconv.
     handle.scenario_path.write_bytes(normalized.encode("koi8-r"))
 
+    # Run mud-sim with cwd=run_dir so its `syslog`, `log/errlog.txt`, etc.
+    # land in the per-run directory (writable by the container user) instead
+    # of /app (root-owned, container-user can't write there).
+    log_dir = handle.root / "log"
+    log_dir.mkdir(exist_ok=True)
     try:
         result = subprocess.run(  # noqa: S603 -- args are not user-controlled
             [mud_sim_bin, "--config", str(handle.scenario_path), "-d", world_dir],
             capture_output=True,
             timeout=timeout_s,
+            cwd=str(handle.root),
         )
     except subprocess.TimeoutExpired as e:
         msg = f"mud-sim timed out after {timeout_s}s\n"

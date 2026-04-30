@@ -32,20 +32,22 @@
   </dl>
 </section>
 
-{% if snapshot.get('feats_list') %}
+{% set feats = (snapshot.get('feats_list') or '').split('|') | reject('equalto', '') | reject('equalto', '!undefined!') | list %}
+{% if feats %}
 <section class="state-section">
-  <h4>Способности ({{ snapshot.feats_list|length }})</h4>
+  <h4>Способности ({{ feats|length }})</h4>
   <ul class="feat-list">
-    {% for f in snapshot.feats_list %}<li>{{ f }}</li>{% endfor %}
+    {% for f in feats %}<li>{{ f }}</li>{% endfor %}
   </ul>
 </section>
 {% endif %}
 
+{% set affs = (snapshot.get('affects_list') or '').split('|') | reject('equalto', '') | list %}
 <section class="state-section">
   <h4>Аффекты ({{ snapshot.affects_count }})</h4>
-  {% if snapshot.get('affects_list') %}
+  {% if affs %}
   <ul class="aff-list">
-    {% for a in snapshot.affects_list %}<li>{{ a }}</li>{% endfor %}
+    {% for a in affs %}<li>{{ a }}</li>{% endfor %}
   </ul>
   {% else %}
   <ul class="aff-list">
