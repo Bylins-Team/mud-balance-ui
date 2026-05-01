@@ -8,7 +8,8 @@
   <h1>Новый прогон</h1>
 </header>
 
-<form method="post" action="{{ url_for('ui.runs_create') }}" id="scenario-form" class="scenario-form">
+<form method="post" action="{{ url_for('ui.runs_create') }}" id="scenario-form" class="scenario-form"
+      data-prefill-yaml="{{ prefill_yaml or '' }}">
 
   <section class="scenario-fields">
     <h3>Параметры</h3>
@@ -76,10 +77,11 @@
         <ul class="pet-list" data-pet-prefix="atk"></ul>
         <button type="button" class="secondary pet-add" data-pet-prefix="atk">+ моб</button>
       </fieldset>
-      <div class="field-row">
-        <label for="atk_affects">аффекты</label>
-        <input type="text" id="atk_affects" name="_atk_affects" placeholder="защита, доблесть (через запятую)" autocomplete="off">
-      </div>
+      <fieldset class="subsection">
+        <legend>Преднанесённые аффекты</legend>
+        <ul class="aff-row-list" data-aff-prefix="atk"></ul>
+        <button type="button" class="secondary aff-add" data-aff-prefix="atk">+ аффект</button>
+      </fieldset>
     </fieldset>
 
     <fieldset class="participant" data-prefix="vic">
@@ -125,10 +127,11 @@
         <ul class="pet-list" data-pet-prefix="vic"></ul>
         <button type="button" class="secondary pet-add" data-pet-prefix="vic">+ моб</button>
       </fieldset>
-      <div class="field-row">
-        <label for="vic_affects">аффекты</label>
-        <input type="text" id="vic_affects" name="_vic_affects" placeholder="защита, доблесть" autocomplete="off">
-      </div>
+      <fieldset class="subsection">
+        <legend>Преднанесённые аффекты</legend>
+        <ul class="aff-row-list" data-aff-prefix="vic"></ul>
+        <button type="button" class="secondary aff-add" data-aff-prefix="vic">+ аффект</button>
+      </fieldset>
     </fieldset>
 
     <fieldset>
@@ -234,7 +237,7 @@
       lines.push('  pets:');
       for (const p of pets) lines.push(`    - { vnum: ${p} }`);
     }
-    const affs = csvList(`_${prefix}_affects`);
+    const affs = collectAffects(prefix);
     if (affs.length) {
       lines.push('  affects:');
       for (const a of affs) lines.push(`    - { spell: ${a} }`);
@@ -249,6 +252,13 @@
   function collectPets(prefix) {
     const list = form.querySelector(`.pet-list[data-pet-prefix="${prefix}"]`);
     return [...list.querySelectorAll('.pet-row [data-vnum]')].map(el => parseInt(el.dataset.vnum, 10)).filter(n => !isNaN(n));
+  }
+  function collectAffects(prefix) {
+    const list = form.querySelector(`.aff-row-list[data-aff-prefix="${prefix}"]`);
+    if (!list) return [];
+    return [...list.querySelectorAll('.aff-row [data-spell]')]
+      .map(el => el.dataset.spell)
+      .filter(Boolean);
   }
 
   function buildYaml() {
@@ -299,7 +309,11 @@
     }
     if (Array.isArray(p.affects)) {
       const names = p.affects.map(a => (typeof a === 'object' && a.spell) ? a.spell : '').filter(Boolean);
-      setVal(`_${prefix}_affects`, names.join(', '));
+      const list = form.querySelector(`.aff-row-list[data-aff-prefix="${prefix}"]`);
+      if (list) {
+        list.innerHTML = '';
+        for (const n of names) addAffectRow(list, n);
+      }
     }
   }
 
@@ -425,19 +439,31 @@
     input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
   }
 
-  function updateAutocompleteFromHidden() {
+  async function updateAutocompleteFromHidden() {
     // After applying YAML or initial load, populate visible text from hidden.
+    // For /api/mobs and /api/objects we async-fetch the name so the user
+    // sees '#102 костяная гончая' instead of just '#102'.
+    const proms = [];
     form.querySelectorAll('.autocomplete').forEach(root => {
       const input = root.querySelector('.autocomplete-input');
       const hidden = root.querySelector('input[type=hidden]');
-      if (hidden.value && !input.value) {
-        if (root.dataset.autocompleteSource.endsWith('/spells')) {
-          input.value = hidden.value;
-        } else {
-          input.value = `#${hidden.value}`;
-        }
+      if (!hidden.value || input.value) return;
+      const url = root.dataset.autocompleteSource;
+      if (url.endsWith('/spells')) {
+        input.value = hidden.value;
+        return;
       }
+      // /api/mobs or /api/objects: ?q=<vnum> returns up to 25 matches,
+      // pick the one whose vnum equals exactly.
+      proms.push(fetch(`${url}?q=${encodeURIComponent(hidden.value)}`)
+        .then(r => r.json())
+        .then(items => {
+          const item = (items || []).find(x => String(x.vnum) === String(hidden.value));
+          input.value = item ? `#${item.vnum} ${item.name}` : `#${hidden.value}`;
+        })
+        .catch(() => { input.value = `#${hidden.value}`; }));
     });
+    await Promise.all(proms);
   }
 
   form.querySelectorAll('.autocomplete').forEach(setupAutocomplete);
@@ -684,6 +710,68 @@
     input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
   }
 
+  // -------- affect rows (spell autocomplete) --------
+  function addAffectRow(list, name) {
+    const li = document.createElement('li');
+    li.className = 'aff-row';
+    const ac = document.createElement('div');
+    ac.className = 'autocomplete';
+    ac.dataset.autocompleteSource = '/api/spells';
+    ac.innerHTML = `
+      <input type="text" class="autocomplete-input" placeholder="заклинание…" autocomplete="off">
+      <input type="hidden" class="aff-spell">
+      <ul class="autocomplete-list"></ul>`;
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'kit-del'; del.textContent = '×';
+    del.title = 'убрать';
+    del.addEventListener('click', () => { li.remove(); if (!userEdited) regenerate(); });
+    li.appendChild(ac);
+    li.appendChild(del);
+    list.appendChild(li);
+    setupSpellAutocomplete(ac);
+    if (name) {
+      ac.querySelector('.aff-spell').dataset.spell = name;
+      ac.querySelector('.aff-spell').value = name;
+      ac.querySelector('.autocomplete-input').value = name;
+    }
+  }
+
+  function setupSpellAutocomplete(root) {
+    const input = root.querySelector('.autocomplete-input');
+    const hidden = root.querySelector('.aff-spell');
+    const list = root.querySelector('.autocomplete-list');
+    async function query() {
+      try {
+        const r = await fetch(`/api/spells?q=${encodeURIComponent(input.value)}`);
+        if (!r.ok) return;
+        const items = await r.json();
+        list.innerHTML = '';
+        if (!items.length) { list.classList.remove('open'); return; }
+        for (const item of items) {
+          const li = document.createElement('li');
+          li.title = `${item.rus} · ${item.eng}`;
+          const name = document.createElement('span'); name.className = 'autocomplete-name'; name.textContent = item.rus;
+          const eng = document.createElement('span'); eng.className = 'autocomplete-eng'; eng.textContent = item.eng;
+          li.appendChild(name); li.appendChild(eng);
+          li.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            hidden.value = item.rus;
+            hidden.dataset.spell = item.rus;
+            input.value = item.rus;
+            list.classList.remove('open');
+            if (!userEdited) regenerate();
+          });
+          list.appendChild(li);
+        }
+        list.classList.add('open');
+      } catch (_) {}
+    }
+    let t;
+    input.addEventListener('input', () => { clearTimeout(t); t = setTimeout(query, 120); });
+    input.addEventListener('focus', query);
+    input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
+  }
+
   // Wire "+" buttons.
   form.querySelectorAll('.kit-add').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -695,6 +783,12 @@
     btn.addEventListener('click', () => {
       const list = form.querySelector(`.pet-list[data-pet-prefix="${btn.dataset.petPrefix}"]`);
       addPetRow(list, '');
+    });
+  });
+  form.querySelectorAll('.aff-add').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const list = form.querySelector(`.aff-row-list[data-aff-prefix="${btn.dataset.affPrefix}"]`);
+      addAffectRow(list, '');
     });
   });
 
@@ -734,9 +828,23 @@
     }
   });
 
+  // -------- persistence: localStorage + ?from=run-id pre-fill --------
+  const STORAGE_KEY = 'mud-balance-ui:last-scenario';
+  const prefill = form.dataset.prefillYaml || localStorage.getItem(STORAGE_KEY) || '';
+  if (prefill) {
+    ta.value = prefill;
+    parseYamlToForm();   // populates structured fields from YAML
+    userEdited = false;
+    highlight();
+  }
+  // Save last submitted YAML on form submit so the next /runs/new has it.
+  form.addEventListener('submit', () => {
+    try { localStorage.setItem(STORAGE_KEY, ta.value); } catch (_) {}
+  });
+
   updateAutocompleteFromHidden();
   updateVisibility();
-  regenerate();
+  if (!prefill) regenerate();
 })();
 </script>
 {% endblock %}

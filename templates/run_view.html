@@ -11,7 +11,11 @@
       <span class="vs-sep">vs</span>
       <span class="vs-victim">{{ meta.get('victim', '?') }}</span>
     </h1>
-    <a class="back-link" href="{{ url_for('ui.runs_list') }}">← все прогоны</a>
+    <div class="run-header-actions">
+      <a class="back-link" href="{{ url_for('ui.runs_list') }}">← все прогоны</a>
+      <a class="repeat-btn" href="{{ url_for('ui.runs_new', **{'from': handle.run_id}) }}"
+         title="открыть форму с этим сценарием для запуска похожего">↻ повторить с правкой</a>
+    </div>
   </div>
   <dl class="run-stats">
     <div><dt>dpr</dt><dd>{{ meta.get('dpr', 0) }}</dd></div>

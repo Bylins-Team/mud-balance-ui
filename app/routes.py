@@ -66,9 +66,18 @@ PC_CLASSES = [
 
 @bp.route("/runs/new", methods=["GET"])
 def runs_new():
-    # The form generates its own YAML via JS from structured fields; no
-    # server-side default needed.
-    return render_template("runs_new.html", pc_classes=PC_CLASSES)
+    # Prefill the form from an existing run if `?from=<run-id>` is present.
+    # Falls back to localStorage on the client if no `from` and no value
+    # is found there either, the form generates its own default.
+    prefill_yaml = ""
+    src_id = request.args.get("from")
+    if src_id:
+        src = storage.get_run(current_app.config["RUNS_DIR"], src_id)
+        if src is not None:
+            prefill_yaml = storage.load_meta(src).get("scenario_yaml") or ""
+    return render_template("runs_new.html",
+                           pc_classes=PC_CLASSES,
+                           prefill_yaml=prefill_yaml)
 
 
 @bp.route("/runs", methods=["POST"])
