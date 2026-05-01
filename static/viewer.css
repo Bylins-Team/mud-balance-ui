@@ -264,21 +264,77 @@ h3 { font-size: 15px; }
 .card-delete button:hover { background: var(--bad); color: var(--fg); }
 
 /* ----- runs new form ----- */
+/* Сворачиваемые панели: 5 колонок -- [tab-form][form][gap][yaml][tab-yaml].
+   tab-form/tab-yaml -- узкие вертикальные вкладки, видны всегда; нажатие
+   сворачивает соседнюю панель в ту же ширину (становится тоже узкой). */
 .scenario-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 24px;
-  align-items: start;
+  grid-template-columns: 22px minmax(0, 1fr) minmax(0, 1fr) 22px;
+  gap: 0 12px;
+  align-items: stretch;
+  position: relative;
 }
-@media (max-width: 1100px) { .scenario-form { grid-template-columns: 1fr; } }
-/* Когда YAML скрыт -- форма на полный grid-row, плюс floating "⤓ YAML"
-   button в правом верхнем углу. */
-.scenario-form.yaml-collapsed { grid-template-columns: 1fr; }
-#yaml-toggle-show {
-  position: fixed;
-  top: 60px;
-  right: 24px;
-  z-index: 4;
+.scenario-form .scenario-fields { grid-column: 2; }
+.scenario-form .scenario-yaml   { grid-column: 3; }
+.scenario-form .tab-form { grid-column: 1; }
+.scenario-form .tab-yaml { grid-column: 4; }
+
+/* Default chevrons: левая вкладка (свернёт форму) указывает '‹',
+   правая (свернёт YAML) -- '›'. После collapse'а chevron'ы меняются
+   на противоположные, намекая что клик развернёт обратно. */
+.tab-form .tab-icon::before { content: "‹"; }
+.tab-yaml .tab-icon::before { content: "›"; }
+
+/* Свёрнуто слева -- форма прячется, остаётся вкладка слева. */
+.scenario-form.form-collapsed { grid-template-columns: 22px 0 minmax(0, 1fr) 22px; }
+.scenario-form.form-collapsed .scenario-fields { display: none; }
+.scenario-form.form-collapsed .tab-form .tab-icon::before { content: "›"; }
+
+/* Свёрнуто справа -- YAML прячется. */
+.scenario-form.yaml-collapsed { grid-template-columns: 22px minmax(0, 1fr) 0 22px; }
+.scenario-form.yaml-collapsed .scenario-yaml { display: none; }
+.scenario-form.yaml-collapsed .tab-yaml .tab-icon::before { content: "‹"; }
+
+@media (max-width: 1100px) {
+  .scenario-form { grid-template-columns: 1fr; gap: 12px; }
+  .scenario-form .scenario-fields,
+  .scenario-form .scenario-yaml { grid-column: 1; }
+  .scenario-form .tab-form,
+  .scenario-form .tab-yaml { display: none; }
+}
+
+.collapse-tab {
+  border: 1px solid var(--panel-edge);
+  background: var(--panel);
+  color: var(--fg-dim);
+  cursor: pointer;
+  padding: 0;
+  width: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: var(--radius);
+  transition: background 0.1s, color 0.1s;
+  min-height: 200px;
+  position: sticky;
+  top: 70px;
+  align-self: start;
+  height: calc(100vh - 90px);
+}
+.collapse-tab:hover { color: var(--accent); border-color: var(--accent); }
+.collapse-tab .tab-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.collapse-tab .tab-icon {
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .scenario-fields {
