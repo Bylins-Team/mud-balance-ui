@@ -484,6 +484,21 @@ h3 { font-size: 15px; }
   overflow: hidden;
   text-overflow: ellipsis;
 }
+.autocomplete-lock {
+  grid-row: 1;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  color: var(--bad);
+  background: rgba(217,103,100,.15);
+  padding: 1px 6px;
+  border-radius: 8px;
+  align-self: center;
+}
+.autocomplete-list li.autocomplete-locked {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.autocomplete-list li.autocomplete-locked .autocomplete-name { color: var(--fg-mute); }
 
 .yaml-actions { display: flex; gap: 6px; }
 .yaml-actions button.secondary {

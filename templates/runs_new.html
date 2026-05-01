@@ -47,6 +47,10 @@
         <label for="atk_level">уровень</label>
         <input type="number" id="atk_level" name="_atk_level" value="30" min="1" max="34">
       </div>
+      <div class="field-row" data-show-when="_atk_type=player">
+        <label for="atk_remort">реморт</label>
+        <input type="number" id="atk_remort" name="_atk_remort" value="0" min="0" max="99">
+      </div>
       <div class="field-row" data-show-when="_atk_type=mob">
         <label>моб</label>
         <div class="autocomplete" data-autocomplete-source="/api/mobs" data-autocomplete-target="_atk_vnum">
@@ -117,6 +121,10 @@
       <div class="field-row" data-show-when="_vic_type=player">
         <label for="vic_level">уровень</label>
         <input type="number" id="vic_level" name="_vic_level" value="30" min="1" max="34">
+      </div>
+      <div class="field-row" data-show-when="_vic_type=player">
+        <label for="vic_remort">реморт</label>
+        <input type="number" id="vic_remort" name="_vic_remort" value="0" min="0" max="99">
       </div>
       <div class="field-row">
         <label for="vic_max_hit">max_hit</label>
@@ -236,6 +244,8 @@
     if (type === 'player') {
       lines.push(`  class: ${valOrNone(`_${prefix}_class`) || 'bogatyr'}`);
       lines.push(`  level: ${valOrNone(`_${prefix}_level`) || 30}`);
+      const rem = valOrNone(`_${prefix}_remort`);
+      if (rem !== null && rem !== '0') lines.push(`  remort: ${rem}`);
     } else {
       lines.push(`  vnum: ${valOrNone(`_${prefix}_vnum`) || 0}`);
     }
@@ -307,6 +317,7 @@
     if (p.type === 'player') {
       if (p.class !== undefined) setVal(`_${prefix}_class`, p.class);
       if (p.level !== undefined) setVal(`_${prefix}_level`, p.level);
+      if (p.remort !== undefined) setVal(`_${prefix}_remort`, p.remort);
     }
     if (p.type === 'mob' && p.vnum !== undefined) setVal(`_${prefix}_vnum`, p.vnum);
     const stats = p.stats || {};
@@ -634,6 +645,9 @@
     const list = root.querySelector('.autocomplete-list');
     async function query() {
       const slot = slotSel.value;
+      const prefix = kitList ? kitList.dataset.kitPrefix : 'atk';
+      const pcLevel  = parseInt(valOrNone(`_${prefix}_level`)  || 30, 10);
+      const pcRemort = parseInt(valOrNone(`_${prefix}_remort`) || 0,  10);
       try {
         const r = await fetch(`/api/objects?slot=${slot}&q=${encodeURIComponent(input.value)}`);
         if (!r.ok) return;
@@ -642,10 +656,26 @@
         if (!items.length) { list.classList.remove('open'); return; }
         for (const item of items) {
           const li = document.createElement('li');
-          if (item.summary) li.title = `${item.name} · ${item.summary}`;
+          const lvlReq = (item.min_level  || 0) > pcLevel;
+          const remReq = (item.min_remort || 0) > pcRemort;
+          if (lvlReq || remReq) {
+            li.classList.add('autocomplete-locked');
+            const reasons = [];
+            if (lvlReq) reasons.push(`требуется уровень ${item.min_level}`);
+            if (remReq) reasons.push(`требуется реморт ${item.min_remort}`);
+            li.title = reasons.join(', ');
+          } else if (item.summary) {
+            li.title = `${item.name} · ${item.summary}`;
+          }
           const num = document.createElement('span'); num.className = 'autocomplete-vnum'; num.textContent = `#${item.vnum}`;
           const name = document.createElement('span'); name.className = 'autocomplete-name'; name.textContent = item.name;
           li.appendChild(num); li.appendChild(name);
+          if (lvlReq || remReq) {
+            const lock = document.createElement('span');
+            lock.className = 'autocomplete-lock';
+            lock.textContent = lvlReq ? `lvl ${item.min_level}` : `r${item.min_remort}`;
+            li.appendChild(lock);
+          }
           if (item.summary) {
             const sm = document.createElement('span');
             sm.className = 'autocomplete-summary';

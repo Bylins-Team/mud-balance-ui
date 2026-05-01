@@ -69,6 +69,8 @@ class Obj:
     applies: tuple[Apply, ...] = ()
     affect_flags: tuple[str, ...] = ()  # kHaste, kStoneHands, kInvisible, ...
     extra_flags: tuple[str, ...] = ()
+    min_level: int = 0    # ch level required to wear (engine `level` field)
+    min_remort: int = 0   # ch remort required (engine `minimum_remorts`; 0 = no req)
 
     def matches(self, query: str) -> bool:
         q = query.lower()
@@ -492,6 +494,8 @@ def load_objects(world_dir: Path) -> list[Obj]:
                     aff = tuple(f for f in aff_raw if isinstance(f, str)) if isinstance(aff_raw, list) else ()
                     extra_raw = entry.get("extra_flags") or []
                     extra = tuple(f for f in extra_raw if isinstance(f, str)) if isinstance(extra_raw, list) else ()
+                    min_level = entry.get("level") if isinstance(entry.get("level"), int) else 0
+                    min_remort = entry.get("minimum_remorts") if isinstance(entry.get("minimum_remorts"), int) else 0
                     seen.add(vnum)
                     out.append(Obj(
                         vnum=vnum,
@@ -501,6 +505,8 @@ def load_objects(world_dir: Path) -> list[Obj]:
                         applies=tuple(applies),
                         affect_flags=aff,
                         extra_flags=extra,
+                        min_level=min_level,
+                        min_remort=min_remort,
                     ))
 
     out.sort(key=lambda o: o.vnum)

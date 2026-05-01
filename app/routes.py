@@ -363,6 +363,8 @@ def api_objects():
                 for f in o.affect_flags
             ],
             "summary": world.obj_summary(o),
+            "min_level": o.min_level,
+            "min_remort": o.min_remort,
         }
         for o in items
     ])
