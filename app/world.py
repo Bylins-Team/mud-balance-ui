@@ -213,6 +213,24 @@ AFFECT_FLAG_LABELS: dict[str, str] = {
     "kNoCharge": "натиск",
     "kInjured": "ранен",
     "kFrenzy": "исступление",
+
+    # EWeaponAffect-style имена (предметы хранят affect_flags в этой
+    # нумерации после fix(yaml-world): item affect_flags резолвить через
+    # EWeaponAffect). Маппим их на тот же in-game label, что и
+    # соответствующие EAffect-имена -- weapon_affect[] таблица в движке
+    # на equip превращает EWeaponAffect-bit в эффект на персонаже под
+    # EAffect-именем, поэтому пользователь видит одно и то же.
+    "kBlindness":          "слепота",                # → kBlind
+    "kInvisibility":       "невидимость",            # → kInvisible
+    "kDetectInvisibility": "определение невидимости",# → kDetectInvisible
+    "kPoison":             "яд",                     # → kPoisoned
+    "kAwareness":          "настороженность",        # → kAwarness (typo в EAffect)
+    "kDisguising":         "маскировка",             # → kDisguise
+    "kShield":             "защита богов",           # → kGodsShield
+    "kStoneHand":          "каменная рука",          # → kStoneHands
+    "kComamnder":          "полководец",             # → kCommander (typo в WEAPON_AFFECT_FLAGS)
+    # Имена, которые совпадают (kHaste, kSlow, kSanctuary, kFly, ...) уже
+    # выше -- не дублируем.
 }
 
 
