@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import time as _time
 from pathlib import Path
 
 from flask import Blueprint, abort, current_app, redirect, render_template, request, url_for
@@ -136,11 +137,14 @@ def run_status(run_id: str):
                 # near the start of every event, so no JSON parse needed.
                 if b'"name":"round"' in line:
                     done += 1
+    started = meta.get("started_at")
+    elapsed = max(0, int(_time.time() - started)) if isinstance(started, (int, float)) else 0
     return jsonify({
         "status": meta.get("status", "unknown"),
         "queued_at": meta.get("queued_at"),
-        "started_at": meta.get("started_at"),
+        "started_at": started,
         "finished_at": meta.get("finished_at"),
+        "elapsed_s": elapsed,
         "rounds_done": done,
         "rounds_target": target,
     })

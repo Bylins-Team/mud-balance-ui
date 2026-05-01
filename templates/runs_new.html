@@ -563,13 +563,14 @@
         if (!items.length) { list.classList.remove('open'); return; }
         for (const item of items) {
           const li = document.createElement('li');
+          if (item.summary) li.title = `${item.name} · ${item.summary}`;
           const num = document.createElement('span'); num.className = 'autocomplete-vnum'; num.textContent = `#${item.vnum}`;
           const name = document.createElement('span'); name.className = 'autocomplete-name'; name.textContent = item.name;
-          li.appendChild(num); li.appendChild(document.createTextNode(' ')); li.appendChild(name);
+          li.appendChild(num); li.appendChild(name);
           if (item.summary) {
             const sm = document.createElement('span');
             sm.className = 'autocomplete-summary';
-            sm.textContent = ' · ' + item.summary;
+            sm.textContent = item.summary;
             li.appendChild(sm);
           }
           li.addEventListener('mousedown', (e) => {
