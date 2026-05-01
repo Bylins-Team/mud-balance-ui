@@ -274,11 +274,14 @@ h3 { font-size: 15px; }
   align-items: stretch;
   position: relative;
 }
-.scenario-form .scenario-fields { grid-column: 2; }
-.scenario-form .scenario-yaml   { grid-column: 3; }
-.scenario-form .tab-form { grid-column: 1; }
-.scenario-form .tab-yaml { grid-column: 4; }
-.scenario-form .form-actions { grid-column: 1 / -1; margin-top: 16px; }
+/* grid-row: 1 на всех четырёх -- иначе auto-placement выкидывает
+   tab-form (col 1) в следующую строку, потому что в HTML он идёт
+   после scenario-fields (col 2) и курсор уже прошёл col 1. */
+.scenario-form .scenario-fields { grid-column: 2; grid-row: 1; }
+.scenario-form .scenario-yaml   { grid-column: 3; grid-row: 1; }
+.scenario-form .tab-form { grid-column: 1; grid-row: 1; }
+.scenario-form .tab-yaml { grid-column: 4; grid-row: 1; }
+.scenario-form .form-actions { grid-column: 1 / -1; grid-row: 2; margin-top: 16px; }
 
 /* Default chevrons: левая вкладка (свернёт форму) указывает '‹',
    правая (свернёт YAML) -- '›'. После collapse'а chevron'ы меняются
