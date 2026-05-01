@@ -77,10 +77,14 @@
     {% for e in equip %}
     {% set parts = e.split(':', 2) %}
     {% if parts|length == 3 %}
-    <li>
+    {% set tip = obj_tooltip(parts[1]) %}
+    <li title="{{ tip if tip else 'нет дополнительных бонусов' }}">
       <span class="equip-slot">{{ parts[0] }}</span>
       <span class="equip-name">{{ parts[2] }}</span>
       <span class="equip-vnum">#{{ parts[1] }}</span>
+      {% if tip and tip != '—' %}
+      <span class="equip-bonus">{{ tip }}</span>
+      {% endif %}
     </li>
     {% endif %}
     {% endfor %}

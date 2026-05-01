@@ -482,27 +482,74 @@
     const del = document.createElement('button');
     del.type = 'button'; del.className = 'kit-del'; del.textContent = '×';
     del.title = 'убрать';
-    del.addEventListener('click', () => { li.remove(); if (!userEdited) regenerate(); });
+    del.addEventListener('click', () => { li.remove(); recalcKitTotals(list); if (!userEdited) regenerate(); });
+    const bonusLine = document.createElement('div');
+    bonusLine.className = 'kit-bonus';
     li.appendChild(slotSel);
     li.appendChild(ac);
     li.appendChild(del);
+    li.appendChild(bonusLine);
     list.appendChild(li);
-    setupKitAutocomplete(ac, slotSel);
+    setupKitAutocomplete(ac, slotSel, bonusLine, list);
     if (vnum) {
       ac.querySelector('.kit-vnum').dataset.vnum = vnum;
       ac.querySelector('.kit-vnum').value = vnum;
       ac.querySelector('.autocomplete-input').value = `#${vnum}`;
+      // Lazy fetch summary for restored row.
+      fetch(`/api/objects?q=${vnum}`).then(r => r.json()).then(items => {
+        const o = items.find(x => String(x.vnum) === String(vnum));
+        if (o) renderBonus(bonusLine, o);
+        recalcKitTotals(list);
+      });
     }
     slotSel.addEventListener('change', () => {
       // Reset selection on slot switch -- the previous item may not fit.
       ac.querySelector('.autocomplete-input').value = '';
       ac.querySelector('.kit-vnum').value = '';
       delete ac.querySelector('.kit-vnum').dataset.vnum;
+      bonusLine.textContent = '';
+      delete li.dataset.applies;
+      delete li.dataset.flags;
+      recalcKitTotals(list);
       if (!userEdited) regenerate();
     });
   }
 
-  function setupKitAutocomplete(root, slotSel) {
+  function renderBonus(el, item) {
+    el.textContent = item.summary || '';
+    // Stash structured data on the row for total summing.
+    const li = el.closest('.kit-row');
+    li.dataset.applies = JSON.stringify(item.applies || []);
+    li.dataset.flags = JSON.stringify((item.affect_flags || []).map(f => f.label));
+  }
+
+  function recalcKitTotals(list) {
+    const totals = {}; // location_name -> sum modifier
+    const flags = new Set();
+    for (const li of list.querySelectorAll('.kit-row')) {
+      try {
+        const aps = JSON.parse(li.dataset.applies || '[]');
+        for (const ap of aps) {
+          totals[ap.name] = (totals[ap.name] || 0) + ap.modifier;
+        }
+        for (const f of JSON.parse(li.dataset.flags || '[]')) flags.add(f);
+      } catch (_) {}
+    }
+    const fieldset = list.closest('fieldset');
+    let summary = fieldset.querySelector('.kit-summary');
+    if (!summary) {
+      summary = document.createElement('div');
+      summary.className = 'kit-summary';
+      list.parentElement.insertBefore(summary, list.nextSibling);
+    }
+    const parts = Object.entries(totals)
+      .filter(([, v]) => v !== 0)
+      .map(([k, v]) => `${v >= 0 ? '+' : ''}${v} ${k}`);
+    if (flags.size) parts.push(...flags);
+    summary.textContent = parts.length ? `Σ: ${parts.join(', ')}` : '';
+  }
+
+  function setupKitAutocomplete(root, slotSel, bonusLine, kitList) {
     const input = root.querySelector('.autocomplete-input');
     const hidden = root.querySelector('.kit-vnum');
     const list = root.querySelector('.autocomplete-list');
@@ -519,12 +566,20 @@
           const num = document.createElement('span'); num.className = 'autocomplete-vnum'; num.textContent = `#${item.vnum}`;
           const name = document.createElement('span'); name.className = 'autocomplete-name'; name.textContent = item.name;
           li.appendChild(num); li.appendChild(document.createTextNode(' ')); li.appendChild(name);
+          if (item.summary) {
+            const sm = document.createElement('span');
+            sm.className = 'autocomplete-summary';
+            sm.textContent = ' · ' + item.summary;
+            li.appendChild(sm);
+          }
           li.addEventListener('mousedown', (e) => {
             e.preventDefault();
             hidden.value = item.vnum;
             hidden.dataset.vnum = item.vnum;
             input.value = `#${item.vnum} ${item.name}`;
             list.classList.remove('open');
+            if (bonusLine) renderBonus(bonusLine, item);
+            if (kitList) recalcKitTotals(kitList);
             if (!userEdited) regenerate();
           });
           list.appendChild(li);

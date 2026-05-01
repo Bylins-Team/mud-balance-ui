@@ -336,7 +336,21 @@ def api_objects():
     world_dir = Path(current_app.config["MUD_SIM_WORLD_DIR"])
     items = world.search_objects(world_dir, slot, q)
     return jsonify([
-        {"vnum": o.vnum, "name": o.name, "type": o.obj_type, "wear_flags": list(o.wear_flags)}
+        {
+            "vnum": o.vnum,
+            "name": o.name,
+            "type": o.obj_type,
+            "wear_flags": list(o.wear_flags),
+            "applies": [
+                {"location": ap.location, "name": ap.location_name, "modifier": ap.modifier}
+                for ap in o.applies
+            ],
+            "affect_flags": [
+                {"key": f, "label": world.AFFECT_FLAG_LABELS.get(f, f)}
+                for f in o.affect_flags
+            ],
+            "summary": world.obj_summary(o),
+        }
         for o in items
     ])
 

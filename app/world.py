@@ -54,11 +54,21 @@ class Mob:
 
 
 @dataclass(frozen=True)
+class Apply:
+    location: int
+    location_name: str  # human-readable, e.g. "сила"
+    modifier: int
+
+
+@dataclass(frozen=True)
 class Obj:
     vnum: int
     name: str
     obj_type: str  # kWeapon, kArmor, ...
     wear_flags: tuple[str, ...]
+    applies: tuple[Apply, ...] = ()
+    affect_flags: tuple[str, ...] = ()  # kHaste, kStoneHands, kInvisible, ...
+    extra_flags: tuple[str, ...] = ()
 
     def matches(self, query: str) -> bool:
         q = query.lower()
@@ -72,6 +82,83 @@ class Obj:
             return True
         flags = SLOT_FLAGS.get(slot, ())
         return any(f in self.wear_flags for f in flags)
+
+
+# EApply int -> short human label. Mirrors enum EApply in
+# src/gameplay/affects/affect_contants.h. Cover the ones that actually
+# appear on equipment in this world; rare/legacy entries fall through
+# to the generic "apply N".
+APPLY_NAMES: dict[int, str] = {
+    0: "—",
+    1: "сила", 2: "ловк", 3: "ум", 4: "муд", 5: "тело", 6: "обая",
+    9: "возр", 10: "вес", 11: "рост",
+    12: "регмана", 13: "HP", 14: "движ", 15: "$",
+    17: "AC", 18: "hitroll", 19: "damroll",
+    20: "save:воля", 23: "save:крит", 24: "save:маг", 39: "save:рефл",
+    21: "рез:огонь", 22: "рез:воздух", 46: "рез:вода", 47: "рез:земля",
+    48: "рез:жизнь", 49: "рез:разум", 50: "рез:яд",
+    25: "регHP", 26: "регдвиж",
+    27: "1круг", 28: "2круг", 29: "3круг", 30: "4круг",
+    31: "5круг", 32: "6круг", 33: "7круг", 34: "8круг", 35: "9круг",
+    36: "размер", 37: "броня", 38: "яд",
+    40: "успехкаст", 41: "морал", 42: "инициат", 43: "религия",
+    44: "поглощ", 51: "рез:аффект", 52: "рез:маг.урон",
+    62: "физ.рез", 63: "рез:тьма",
+    65: "+опыт%", 66: "+физурон%", 67: "блинк:физ",
+    68: "+магурон%", 69: "блинк:маг",
+}
+
+
+# Affect-flag string -> compact display label (русский).
+AFFECT_FLAG_LABELS: dict[str, str] = {
+    "kHaste": "ускорение",
+    "kStoneHands": "каменные руки",
+    "kWaterBreath": "дых.под.водой",
+    "kFly": "полёт",
+    "kBless": "доблесть",
+    "kBlink": "мерцание",
+    "kSanctuary": "святилище",
+    "kAirShield": "возд.щит",
+    "kFireShield": "огн.щит",
+    "kIceShield": "лед.щит",
+    "kMagicGlass": "зерк.магии",
+    "kPrismaticAura": "призм.аура",
+    "kHolyLight": "св.свет",
+    "kHolyDark": "св.тьма",
+    "kDetectAlign": "видеть.накл",
+    "kDetectInvisible": "видеть.невид",
+    "kDetectMagic": "видеть.магию",
+    "kDetectLife": "видеть.жизнь",
+    "kInfravision": "инфразрение",
+    "kWaterWalk": "ход.по.воде",
+    "kInvisible": "невидимость",
+    "kSneak": "подкрад",
+    "kHide": "укрытие",
+    "kAirAura": "возд.аура",
+    "kFireAura": "огн.аура",
+    "kIceAura": "лед.аура",
+    "kEarthAura": "зем.аура",
+    "kCommander": "полководец",
+    "kCombatLuck": "удача.в.бою",
+    "kGodsShield": "бож.щит",
+    "kSingleLight": "светильник",
+    "kHaemorrhage": "кровотечение",
+    "kSilence": "немота",
+    "kSleep": "сон",
+    "kCharmed": "чармис",
+    "kHorse": "конь",
+    "kCurse": "проклятие",
+    "kPoisoned": "яд",
+    "kBlind": "слепота",
+    "kHold": "удержание",
+    "kAwarness": "осторожность",
+    "kVampirism": "вампиризм",
+    "kBerserk": "ярость",
+    "kFrenzy": "берсерк",
+    "kBrokenChains": "разорв.цепи",
+    "kForcesOfEvil": "силы.зла",
+    "kHelper": "помощник",
+}
 
 
 # Slot key -> tuple of wear-flag strings the engine uses. Keys are stable
@@ -279,12 +366,34 @@ def load_objects(world_dir: Path) -> list[Obj]:
                     obj_type = entry.get("type") if isinstance(entry.get("type"), str) else "?"
                     if obj_type not in WEARABLE_OBJ_TYPES:
                         continue
+                    applies_raw = entry.get("applies") or []
+                    applies: list[Apply] = []
+                    if isinstance(applies_raw, list):
+                        for ap in applies_raw:
+                            if not isinstance(ap, dict):
+                                continue
+                            loc = ap.get("location")
+                            mod = ap.get("modifier")
+                            if not isinstance(loc, int) or not isinstance(mod, int) or mod == 0:
+                                continue
+                            applies.append(Apply(
+                                location=loc,
+                                location_name=APPLY_NAMES.get(loc, f"apply{loc}"),
+                                modifier=mod,
+                            ))
+                    aff_raw = entry.get("affect_flags") or []
+                    aff = tuple(f for f in aff_raw if isinstance(f, str)) if isinstance(aff_raw, list) else ()
+                    extra_raw = entry.get("extra_flags") or []
+                    extra = tuple(f for f in extra_raw if isinstance(f, str)) if isinstance(extra_raw, list) else ()
                     seen.add(vnum)
                     out.append(Obj(
                         vnum=vnum,
                         name=name,
                         obj_type=obj_type,
                         wear_flags=tuple(wearable),
+                        applies=tuple(applies),
+                        affect_flags=aff,
+                        extra_flags=extra,
                     ))
 
     out.sort(key=lambda o: o.vnum)
@@ -308,3 +417,22 @@ def search_objects(world_dir: Path, slot: str, query: str, limit: int = 25) -> l
     if query:
         items = [o for o in items if o.matches(query)]
     return items[:limit]
+
+
+def get_object(world_dir: Path, vnum: int) -> Obj | None:
+    """O(N) lookup over the cached list -- N=17k, fine for occasional UI calls."""
+    for o in load_objects(world_dir):
+        if o.vnum == vnum:
+            return o
+    return None
+
+
+def obj_summary(o: Obj) -> str:
+    """Compact one-line description of an item's bonuses, used for tooltips."""
+    parts: list[str] = []
+    for ap in o.applies:
+        sign = "+" if ap.modifier >= 0 else ""
+        parts.append(f"{sign}{ap.modifier} {ap.location_name}")
+    for f in o.affect_flags:
+        parts.append(AFFECT_FLAG_LABELS.get(f, f))
+    return ", ".join(parts) if parts else "—"

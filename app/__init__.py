@@ -25,8 +25,20 @@ def create_app() -> Flask:
     )
     app.config["RUNS_DIR"].mkdir(parents=True, exist_ok=True)
 
-    from . import routes
+    from . import routes, world
     app.register_blueprint(routes.bp)
+
+    # Jinja helper used by partials/state_panel.html to look up an item's
+    # applies summary by vnum -- avoids having mud-sim emit the full
+    # apply list per char_state event (it only writes 'slot:vnum:name').
+    @app.template_global()
+    def obj_tooltip(vnum: int) -> str:
+        try:
+            v = int(vnum)
+        except (TypeError, ValueError):
+            return ""
+        obj = world.get_object(Path(app.config["MUD_SIM_WORLD_DIR"]), v)
+        return world.obj_summary(obj) if obj else ""
 
     # Recover orphaned runs: anything that says queued/running on boot
     # was interrupted (gunicorn restart, container recreate). Mark them
