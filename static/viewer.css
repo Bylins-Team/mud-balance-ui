@@ -278,6 +278,7 @@ h3 { font-size: 15px; }
 .scenario-form .scenario-yaml   { grid-column: 3; }
 .scenario-form .tab-form { grid-column: 1; }
 .scenario-form .tab-yaml { grid-column: 4; }
+.scenario-form .form-actions { grid-column: 1 / -1; margin-top: 16px; }
 
 /* Default chevrons: левая вкладка (свернёт форму) указывает '‹',
    правая (свернёт YAML) -- '›'. После collapse'а chevron'ы меняются
@@ -559,7 +560,41 @@ h3 { font-size: 15px; }
   line-height: 1;
 }
 .kit-del:hover { background: var(--bad); color: var(--fg); border-color: var(--bad); }
-.kit-add, .pet-add, .aff-add { font-size: 12px; height: 28px; padding: 0 12px; }
+.kit-add, .pet-add { font-size: 12px; height: 28px; padding: 0 12px; }
+
+/* Affect chips: one search input + already-picked chips above it. */
+.aff-chips { display: flex; flex-direction: column; gap: 8px; }
+.aff-chip-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.aff-chip-list:empty { display: none; }
+.aff-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: var(--bg-elev);
+  border: 1px solid rgba(238,133,74,.4);
+  color: var(--accent);
+  border-radius: 12px;
+  padding: 2px 4px 2px 10px;
+  font-size: 12px;
+}
+.aff-chip-x {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  background: transparent;
+  border: none;
+  color: var(--fg-mute);
+  cursor: pointer;
+  border-radius: 50%;
+  font-size: 14px;
+  line-height: 1;
+}
+.aff-chip-x:hover { background: var(--bad); color: var(--fg); }
+.aff-picker { width: 100%; }
 
 .scenario-yaml {
   display: flex;

@@ -148,9 +148,3 @@ docker DNS-имени `mud-balance-ui:5001`.
   формой → серия + сводный график — backlog.
 - `screen_output` для broadcast'ов (`SendMsgToOutdoor`/`SendMsgToGods`) —
   для арены с двумя участниками неактуально.
-
-## TODO
-
-- [ ] **Скриншоты в README** — добавить картинки UI: list, runs_new
-      форма с YAML preview, viewer state-panel + combat log + screen,
-      analytics chart.

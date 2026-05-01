@@ -79,8 +79,13 @@
       </fieldset>
       <fieldset class="subsection">
         <legend>Преднанесённые аффекты</legend>
-        <ul class="aff-row-list" data-aff-prefix="atk"></ul>
-        <button type="button" class="secondary aff-add" data-aff-prefix="atk">+ аффект</button>
+        <div class="aff-chips" data-aff-prefix="atk">
+          <ul class="aff-chip-list"></ul>
+          <div class="autocomplete aff-picker" data-autocomplete-source="/api/spells">
+            <input type="text" class="autocomplete-input" placeholder="+ добавить аффект…" autocomplete="off">
+            <ul class="autocomplete-list"></ul>
+          </div>
+        </div>
       </fieldset>
     </fieldset>
 
@@ -129,8 +134,13 @@
       </fieldset>
       <fieldset class="subsection">
         <legend>Преднанесённые аффекты</legend>
-        <ul class="aff-row-list" data-aff-prefix="vic"></ul>
-        <button type="button" class="secondary aff-add" data-aff-prefix="vic">+ аффект</button>
+        <div class="aff-chips" data-aff-prefix="vic">
+          <ul class="aff-chip-list"></ul>
+          <div class="autocomplete aff-picker" data-autocomplete-source="/api/spells">
+            <input type="text" class="autocomplete-input" placeholder="+ добавить аффект…" autocomplete="off">
+            <ul class="autocomplete-list"></ul>
+          </div>
+        </div>
       </fieldset>
     </fieldset>
 
@@ -264,9 +274,9 @@
     return [...list.querySelectorAll('.pet-row [data-vnum]')].map(el => parseInt(el.dataset.vnum, 10)).filter(n => !isNaN(n));
   }
   function collectAffects(prefix) {
-    const list = form.querySelector(`.aff-row-list[data-aff-prefix="${prefix}"]`);
-    if (!list) return [];
-    return [...list.querySelectorAll('.aff-row [data-spell]')]
+    const root = form.querySelector(`.aff-chips[data-aff-prefix="${prefix}"]`);
+    if (!root) return [];
+    return [...root.querySelectorAll('.aff-chip')]
       .map(el => el.dataset.spell)
       .filter(Boolean);
   }
@@ -319,10 +329,11 @@
     }
     if (Array.isArray(p.affects)) {
       const names = p.affects.map(a => (typeof a === 'object' && a.spell) ? a.spell : '').filter(Boolean);
-      const list = form.querySelector(`.aff-row-list[data-aff-prefix="${prefix}"]`);
-      if (list) {
-        list.innerHTML = '';
-        for (const n of names) addAffectRow(list, n);
+      const root = form.querySelector(`.aff-chips[data-aff-prefix="${prefix}"]`);
+      if (root) {
+        const chipList = root.querySelector('.aff-chip-list');
+        chipList.innerHTML = '';
+        for (const n of names) addAffectChip(root, n);
       }
     }
   }
@@ -591,17 +602,18 @@
     }
     const lines = [];
     if (isPlayer) {
-      // Final stats line: base + apply, формат 'сила: 25+1=26'.
+      // Финальные статы -- база + апплаи. Показываем ВСЕГДА, даже если
+      // апплаев нет: иначе непонятно с чем сравнивать.
       const finalParts = [];
       for (const [name, key] of Object.entries(STAT_BASE_FIELDS)) {
         const baseStr = valOrNone(`_${prefix}_${key}`);
         const base = baseStr === null ? 25 : parseInt(baseStr, 10);
         const delta = totals[name] || 0;
-        if (delta !== 0) {
-          finalParts.push(`${name}: ${base}${delta >= 0 ? '+' : ''}${delta}=${base + delta}`);
-        }
+        const total = base + delta;
+        const deltaTxt = delta === 0 ? '' : ` (${base}${delta >= 0 ? '+' : ''}${delta})`;
+        finalParts.push(`${name}: <strong>${total}</strong>${deltaTxt}`);
       }
-      if (finalParts.length) lines.push(`Финальные статы: ${finalParts.join(', ')}`);
+      lines.push(`Финальные статы: ${finalParts.join(', ')}`);
     }
     // Other applies (HP, AC, hitroll/damroll, ...).
     const otherParts = Object.entries(totals)
@@ -609,8 +621,10 @@
       .map(([k, v]) => `${v >= 0 ? '+' : ''}${v} ${k}`);
     if (otherParts.length) lines.push(`Σ бонусов: ${otherParts.join(', ')}`);
     if (flags.size) lines.push(`Аффекты: ${[...flags].join(', ')}`);
+    // Lines may contain <strong> in 'Финальные статы'; we control them
+    // ourselves so safe to inject. Other arbitrary text already escaped.
     summary.innerHTML = lines.length
-      ? lines.map(l => `<div>${l.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>`).join('')
+      ? lines.map(l => `<div>${l}</div>`).join('')
       : '';
   }
 
@@ -720,36 +734,33 @@
     input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
   }
 
-  // -------- affect rows (spell autocomplete) --------
-  function addAffectRow(list, name) {
-    const li = document.createElement('li');
-    li.className = 'aff-row';
-    const ac = document.createElement('div');
-    ac.className = 'autocomplete';
-    ac.dataset.autocompleteSource = '/api/spells';
-    ac.innerHTML = `
-      <input type="text" class="autocomplete-input" placeholder="заклинание…" autocomplete="off">
-      <input type="hidden" class="aff-spell">
-      <ul class="autocomplete-list"></ul>`;
-    const del = document.createElement('button');
-    del.type = 'button'; del.className = 'kit-del'; del.textContent = '×';
-    del.title = 'убрать';
-    del.addEventListener('click', () => { li.remove(); if (!userEdited) regenerate(); });
-    li.appendChild(ac);
-    li.appendChild(del);
-    list.appendChild(li);
-    setupSpellAutocomplete(ac);
-    if (name) {
-      ac.querySelector('.aff-spell').dataset.spell = name;
-      ac.querySelector('.aff-spell').value = name;
-      ac.querySelector('.autocomplete-input').value = name;
-    }
+  // -------- affect chips (one search input + already-picked chips) --------
+  function addAffectChip(root, name) {
+    if (!name) return;
+    const chipList = root.querySelector('.aff-chip-list');
+    // Avoid duplicates.
+    if ([...chipList.querySelectorAll('.aff-chip')].some(c => c.dataset.spell === name)) return;
+    const chip = document.createElement('li');
+    chip.className = 'aff-chip';
+    chip.dataset.spell = name;
+    const lbl = document.createElement('span');
+    lbl.className = 'aff-chip-name';
+    lbl.textContent = name;
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.className = 'aff-chip-x';
+    x.textContent = '×';
+    x.title = 'убрать';
+    x.addEventListener('click', () => { chip.remove(); if (!userEdited) regenerate(); });
+    chip.appendChild(lbl);
+    chip.appendChild(x);
+    chipList.appendChild(chip);
   }
 
-  function setupSpellAutocomplete(root) {
+  function setupAffectPicker(root) {
     const input = root.querySelector('.autocomplete-input');
-    const hidden = root.querySelector('.aff-spell');
     const list = root.querySelector('.autocomplete-list');
+    const chipsRoot = root.closest('.aff-chips');
     async function query() {
       try {
         const r = await fetch(`/api/spells?q=${encodeURIComponent(input.value)}`);
@@ -765,9 +776,8 @@
           li.appendChild(name); li.appendChild(eng);
           li.addEventListener('mousedown', (e) => {
             e.preventDefault();
-            hidden.value = item.rus;
-            hidden.dataset.spell = item.rus;
-            input.value = item.rus;
+            addAffectChip(chipsRoot, item.rus);
+            input.value = '';
             list.classList.remove('open');
             if (!userEdited) regenerate();
           });
@@ -781,6 +791,7 @@
     input.addEventListener('focus', query);
     input.addEventListener('blur', () => setTimeout(() => list.classList.remove('open'), 100));
   }
+  form.querySelectorAll('.aff-picker').forEach(setupAffectPicker);
 
   // Wire "+" buttons.
   form.querySelectorAll('.kit-add').forEach(btn => {
@@ -793,12 +804,6 @@
     btn.addEventListener('click', () => {
       const list = form.querySelector(`.pet-list[data-pet-prefix="${btn.dataset.petPrefix}"]`);
       addPetRow(list, '');
-    });
-  });
-  form.querySelectorAll('.aff-add').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const list = form.querySelector(`.aff-row-list[data-aff-prefix="${btn.dataset.affPrefix}"]`);
-      addAffectRow(list, '');
     });
   });
 
