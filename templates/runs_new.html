@@ -523,6 +523,13 @@
     li.dataset.flags = JSON.stringify((item.affect_flags || []).map(f => f.label));
   }
 
+  // Names should match the engine's apply_types[] table so the user
+  // sees them the same way as in `носит` / `статы` in-game.
+  const STAT_BASE_FIELDS = {
+    'сила': 'str', 'ловкость': 'dex', 'интеллект': 'int',
+    'мудрость': 'wis', 'телосложение': 'con', 'обаяние': 'cha',
+  };
+
   function recalcKitTotals(list) {
     const totals = {}; // location_name -> sum modifier
     const flags = new Set();
@@ -535,6 +542,10 @@
         for (const f of JSON.parse(li.dataset.flags || '[]')) flags.add(f);
       } catch (_) {}
     }
+    // Determine the participant prefix (atk/vic) to pull base stats from
+    // the matching <input name="_atk_str"> etc.
+    const prefix = list.dataset.kitPrefix;
+    const isPlayer = radio(`_${prefix}_type`) === 'player';
     const fieldset = list.closest('fieldset');
     let summary = fieldset.querySelector('.kit-summary');
     if (!summary) {
@@ -542,11 +553,29 @@
       summary.className = 'kit-summary';
       list.parentElement.insertBefore(summary, list.nextSibling);
     }
-    const parts = Object.entries(totals)
-      .filter(([, v]) => v !== 0)
+    const lines = [];
+    if (isPlayer) {
+      // Final stats line: base + apply, формат 'сила: 25+1=26'.
+      const finalParts = [];
+      for (const [name, key] of Object.entries(STAT_BASE_FIELDS)) {
+        const baseStr = valOrNone(`_${prefix}_${key}`);
+        const base = baseStr === null ? 25 : parseInt(baseStr, 10);
+        const delta = totals[name] || 0;
+        if (delta !== 0) {
+          finalParts.push(`${name}: ${base}${delta >= 0 ? '+' : ''}${delta}=${base + delta}`);
+        }
+      }
+      if (finalParts.length) lines.push(`Финальные статы: ${finalParts.join(', ')}`);
+    }
+    // Other applies (HP, AC, hitroll/damroll, ...).
+    const otherParts = Object.entries(totals)
+      .filter(([k, v]) => v !== 0 && !STAT_BASE_FIELDS[k])
       .map(([k, v]) => `${v >= 0 ? '+' : ''}${v} ${k}`);
-    if (flags.size) parts.push(...flags);
-    summary.textContent = parts.length ? `Σ: ${parts.join(', ')}` : '';
+    if (otherParts.length) lines.push(`Σ бонусов: ${otherParts.join(', ')}`);
+    if (flags.size) lines.push(`Аффекты: ${[...flags].join(', ')}`);
+    summary.innerHTML = lines.length
+      ? lines.map(l => `<div>${l.replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</div>`).join('')
+      : '';
   }
 
   function setupKitAutocomplete(root, slotSel, bonusLine, kitList) {
@@ -680,6 +709,12 @@
     // not a form value; ignore unless user picks an item.
     if (e.target.matches('.autocomplete-input')) return;
     updateVisibility();
+    // Recompute final stats if a base stat / type changed.
+    if (e.target.name && /^_(atk|vic)_(str|dex|con|int|wis|cha|type)$/.test(e.target.name)) {
+      const prefix = e.target.name.slice(1, 4);
+      const list = form.querySelector(`.kit-list[data-kit-prefix="${prefix}"]`);
+      if (list) recalcKitTotals(list);
+    }
     if (!userEdited) regenerate();
   });
   form.addEventListener('change', (e) => {

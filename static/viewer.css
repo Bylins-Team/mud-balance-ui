@@ -468,8 +468,10 @@ h3 { font-size: 15px; }
   font-size: 12px;
   font-family: ui-monospace, monospace;
   color: var(--accent);
+  display: flex; flex-direction: column; gap: 2px;
 }
 .kit-summary:empty { display: none; }
+.kit-summary div { line-height: 1.4; }
 .autocomplete-summary {
   color: var(--accent);
   font-family: ui-monospace, monospace;
