@@ -552,11 +552,15 @@
     if (vnum) {
       ac.querySelector('.kit-vnum').dataset.vnum = vnum;
       ac.querySelector('.kit-vnum').value = vnum;
-      ac.querySelector('.autocomplete-input').value = `#${vnum}`;
-      // Lazy fetch summary for restored row.
+      const inputEl = ac.querySelector('.autocomplete-input');
+      inputEl.value = `#${vnum}`;
+      // Lazy fetch summary + name for restored row.
       fetch(`/api/objects?q=${vnum}`).then(r => r.json()).then(items => {
         const o = items.find(x => String(x.vnum) === String(vnum));
-        if (o) renderBonus(bonusLine, o);
+        if (o) {
+          inputEl.value = `#${o.vnum} ${o.name}`;
+          renderBonus(bonusLine, o);
+        }
         recalcKitTotals(list);
       });
     }
@@ -725,7 +729,12 @@
     if (vnum) {
       ac.querySelector('.pet-vnum').dataset.vnum = vnum;
       ac.querySelector('.pet-vnum').value = vnum;
-      ac.querySelector('.autocomplete-input').value = `#${vnum}`;
+      const petInput = ac.querySelector('.autocomplete-input');
+      petInput.value = `#${vnum}`;
+      fetch(`/api/mobs?q=${vnum}`).then(r => r.json()).then(items => {
+        const m = (items || []).find(x => String(x.vnum) === String(vnum));
+        if (m) petInput.value = `#${m.vnum} ${m.name}`;
+      }).catch(() => {});
     }
   }
 
