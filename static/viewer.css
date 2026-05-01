@@ -321,11 +321,14 @@ h3 { font-size: 15px; }
   gap: 8px;
   border-radius: var(--radius);
   transition: background 0.1s, color 0.1s;
-  min-height: 200px;
   position: sticky;
   top: 70px;
   align-self: start;
-  height: calc(100vh - 90px);
+  /* Компактная вкладка-тоггл, прилипшая к верху viewport'а;
+     не должна пытаться занимать всю высоту экрана. */
+  min-height: 120px;
+  max-height: 50vh;
+  height: 50vh;
 }
 .collapse-tab:hover { color: var(--accent); border-color: var(--accent); }
 .collapse-tab .tab-label {
@@ -621,12 +624,11 @@ h3 { font-size: 15px; }
   border: 1px solid var(--panel-edge);
   border-radius: var(--radius);
   overflow: hidden;
-  /* sticky так, чтобы YAML оставался виден при скролле формы и
-     заполнял видимую часть viewport'а до .form-actions. */
-  position: sticky;
-  top: 70px;
-  height: calc(100vh - 90px);
-  max-height: calc(100vh - 90px);
+  /* Без sticky -- иначе YAML «висит» на месте, а форма уезжает
+     вниз, и form-actions отрывается от обеих панелей. Grid
+     align-items: stretch (по умолчанию) растянет панель на
+     высоту формы, чтобы редактор YAML занимал всю колонку. */
+  min-height: 400px;
 }
 .scenario-yaml .panel-header {
   padding: 10px 16px;
