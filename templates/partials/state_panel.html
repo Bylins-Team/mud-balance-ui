@@ -14,7 +14,7 @@
       {{ snapshot.short_descr or snapshot.target_name }}
     {% else %}
       {{ snapshot.target_name }}{% if snapshot.class_name %}, {{ snapshot.class_name }}{% endif %}
-      <span class="ident-lvl">lvl {{ snapshot.level }}{% if snapshot.get('remort') is not none %} <span class="ident-rem">r{{ snapshot.remort }}</span>{% endif %}</span>
+      <span class="ident-lvl">lvl {{ snapshot.level }}{% if snapshot.get('remort') %} <span class="ident-sep">·</span> <span class="ident-rem">r{{ snapshot.remort }}</span>{% endif %}</span>
     {% endif %}
   </div>
 </section>

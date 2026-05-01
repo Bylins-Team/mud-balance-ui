@@ -9,11 +9,13 @@ services:
     # the developer, not root. UID:GID matches the typical first non-root
     # user on a Linux host (kvirund's account on overseer is 1000:1000).
     user: "1000:1000"
-    # No host port: gateway reaches us via the shared `gateway` network by
-    # service hostname (mud-balance-ui:5001). Exposing on host would just
-    # add attack surface. For local dev without the gateway, uncomment:
-    # ports:
-    #   - "127.0.0.1:5001:5001"
+    # Биндим на 127.0.0.1 хоста, чтобы можно было пробросить SSH-туннелем с
+    # ноута (`ssh -L 5001:127.0.0.1:5001 overseer`) и открыть UI без
+    # basic-auth gateway'я. На 0.0.0.0 не биндим -- иначе порт высунется
+    # в сеть мимо nginx'а. Любой шелл-пользователь на overseer увидит
+    # UI без авторизации, но машина доверенная.
+    ports:
+      - "127.0.0.1:5001:5001"
     expose:
       - "5001"
     volumes:
