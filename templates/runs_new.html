@@ -479,6 +479,11 @@
     form.querySelectorAll('.autocomplete').forEach(root => {
       const input = root.querySelector('.autocomplete-input');
       const hidden = root.querySelector('input[type=hidden]');
+      // .aff-picker -- search-only autocomplete без hidden (chip-list
+      // хранит выбор сам). Без guard'а здесь throw'ит TypeError и
+      // ломает цикл -- следующие autocompletes (включая mob жертвы при
+      // ?from=) не получают prefill.
+      if (!hidden) return;
       if (!hidden.value || input.value) return;
       const url = root.dataset.autocompleteSource;
       if (url.endsWith('/spells')) {
