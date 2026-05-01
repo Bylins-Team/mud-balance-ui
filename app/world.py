@@ -372,21 +372,75 @@ WEARABLE_OBJ_TYPES = {
 }
 
 
+def _load_enabled_zones(world_dir: Path) -> set[int]:
+    """Read zones/index.yaml -- engine only boots zones listed there.
+    Disabled zones (enabled: 0 в исходнике) конвертер не вписывает в
+    index, и obj_proto при boot их пропускает -- mud-sim потом отдаёт
+    'Object (V) X does not exist in database'. UI фильтруем тем же
+    индексом, чтобы autocomplete не предлагал заведомо unloadable items.
+    """
+    idx = world_dir / "world" / "zones" / "index.yaml"
+    if not idx.is_file():
+        return set()
+    try:
+        data = pyyaml.load(idx.read_text(encoding="koi8-r"), Loader=_SafeLoader) or {}
+        zones = data.get("zones") or []
+        return {int(z) for z in zones if isinstance(z, int)}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _zone_obj_indices(world_dir: Path, zone: int) -> set[int]:
+    """Read zones/<zone>/objects/index.yaml. Same purpose as
+    _load_enabled_zones but at the per-object level -- даже в активной
+    зоне отдельный объект может быть disabled и конвертер исключает
+    его из rel-index'а."""
+    p = world_dir / "world" / "zones" / str(zone) / "objects" / "index.yaml"
+    if not p.is_file():
+        return set()
+    try:
+        data = pyyaml.load(p.read_text(encoding="koi8-r"), Loader=_SafeLoader) or {}
+        rels = data.get("objects") or []
+        return {int(r) for r in rels if isinstance(r, int)}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
 def load_objects(world_dir: Path) -> list[Obj]:
     """Walk world/zones/*/objects/*.yaml; index vnum + name + wear_flags.
 
     Same KOI8-R yaml format as mobs. Items without a wear_flags entry, or
     with only `kTake`, or whose `type` is not in WEARABLE_OBJ_TYPES are
     skipped -- we only care about kit the engine will actually equip.
+    Zones not in zones/index.yaml are also skipped -- engine wouldn't
+    boot them.
     """
     global _objs_cache
     if _objs_cache is not None:
         return _objs_cache
 
+    enabled_zones = _load_enabled_zones(world_dir)
+
     files: list[Path] = []
     zones_dir = world_dir / "world" / "zones"
     if zones_dir.is_dir():
-        files = sorted(zones_dir.glob("*/objects/*.yaml"))
+        for zone_dir in sorted(zones_dir.iterdir()):
+            if not zone_dir.is_dir() or not zone_dir.name.isdigit():
+                continue
+            zone_v = int(zone_dir.name)
+            if enabled_zones and zone_v not in enabled_zones:
+                continue
+            obj_idx = _zone_obj_indices(world_dir, zone_v)
+            objs_dir = zone_dir / "objects"
+            if not objs_dir.is_dir():
+                continue
+            for f in sorted(objs_dir.glob("*.yaml")):
+                # f.stem is "00".."99"; rel-num must be in obj_idx.
+                if obj_idx and not f.stem.isdigit():
+                    continue
+                if obj_idx and int(f.stem) not in obj_idx:
+                    continue
+                files.append(f)
 
     out: list[Obj] = []
     seen: set[int] = set()
