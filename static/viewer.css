@@ -271,6 +271,15 @@ h3 { font-size: 15px; }
   align-items: start;
 }
 @media (max-width: 1100px) { .scenario-form { grid-template-columns: 1fr; } }
+/* Когда YAML скрыт -- форма на полный grid-row, плюс floating "⤓ YAML"
+   button в правом верхнем углу. */
+.scenario-form.yaml-collapsed { grid-template-columns: 1fr; }
+#yaml-toggle-show {
+  position: fixed;
+  top: 60px;
+  right: 24px;
+  z-index: 4;
+}
 
 .scenario-fields {
   background: var(--panel);
@@ -544,7 +553,10 @@ h3 { font-size: 15px; }
   font-size: 13px;
   line-height: 1.5;
   tab-size: 2;
-  min-height: 360px;
+  /* Take all remaining vertical space inside .scenario-yaml. min-height:0
+     defeats flex-min-content которое не давало бы редактору сжиматься. */
+  flex: 1;
+  min-height: 0;
 }
 .code-editor-bg,
 .code-editor-input {
@@ -557,7 +569,7 @@ h3 { font-size: 15px; }
   word-break: break-word;
   letter-spacing: 0;
   width: 100%;
-  min-height: inherit;
+  height: 100%;
 }
 .code-editor-bg {
   position: absolute;
@@ -576,7 +588,7 @@ h3 { font-size: 15px; }
   background: transparent;
   border: none;
   outline: none;
-  resize: vertical;
+  resize: none;            /* parent растягивает по flex */
   color: transparent;
   caret-color: var(--fg);
   /* Selection still needs a colour the user can see */

@@ -154,12 +154,15 @@
     </fieldset>
   </section>
 
+  <button type="button" id="yaml-toggle-show" class="secondary" hidden
+          title="показать YAML-панель">⤓ YAML</button>
   <aside class="scenario-yaml">
     <div class="panel-header">
       <h3>YAML сценария</h3>
       <div class="yaml-actions">
         <button type="button" id="yaml-from-form" class="secondary" title="перегенерировать YAML из полей формы">↻ из формы</button>
         <button type="button" id="yaml-to-form" class="secondary" title="распарсить YAML обратно в поля формы">→ в форму</button>
+        <button type="button" id="yaml-toggle-hide" class="secondary" title="скрыть YAML-панель и расширить форму">×</button>
       </div>
     </div>
     <div class="code-editor">
@@ -819,6 +822,22 @@
 
   document.getElementById('yaml-from-form').addEventListener('click', regenerate);
   document.getElementById('yaml-to-form').addEventListener('click', parseYamlToForm);
+
+  // Toggle YAML panel: hide -> form expands full width, restore button
+  // appears in the corner.
+  const yamlPane = document.querySelector('.scenario-yaml');
+  const showBtn = document.getElementById('yaml-toggle-show');
+  const hideBtn = document.getElementById('yaml-toggle-hide');
+  const YAML_HIDDEN_KEY = 'mud-balance-ui:yaml-hidden';
+  function setYamlHidden(hidden) {
+    form.classList.toggle('yaml-collapsed', hidden);
+    yamlPane.hidden = hidden;
+    showBtn.hidden = !hidden;
+    try { localStorage.setItem(YAML_HIDDEN_KEY, hidden ? '1' : '0'); } catch (_) {}
+  }
+  hideBtn.addEventListener('click', () => setYamlHidden(true));
+  showBtn.addEventListener('click', () => setYamlHidden(false));
+  if (localStorage.getItem(YAML_HIDDEN_KEY) === '1') setYamlHidden(true);
 
   // Ctrl/⌘+Enter -- submit from anywhere in the form.
   form.addEventListener('keydown', (e) => {
