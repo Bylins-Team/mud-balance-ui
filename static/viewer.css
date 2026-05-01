@@ -1077,14 +1077,20 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
   font-size: 16px;
   color: var(--fg);
 }
-/* "= 25 + 50" мелким шрифтом под крупным итогом -- чтобы было ясно,
-   что 75 это база+бонус, а не "75 + 50 = 125". */
+/* "25 +50" под крупным итогом -- цветом разделяем базу от бонуса,
+   чтобы не путалось с "75 + 50 = 125": здесь 75 это уже сумма. */
 .stat-row .stat-formula {
   font-size: 10px;
-  color: var(--fg-mute);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  display: inline-flex;
+  gap: 1px;
+  justify-content: center;
 }
+.stat-row .stat-formula .f-base { color: var(--fg-mute); }
+.stat-row .stat-formula .f-bonus { font-weight: 500; }
+.stat-row .stat-formula .f-bonus.pos { color: var(--good); }
+.stat-row .stat-formula .f-bonus.neg { color: var(--bad); }
 .ident-rem {
   display: inline-block;
   background: var(--accent-soft);

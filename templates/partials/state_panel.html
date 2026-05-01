@@ -35,12 +35,11 @@
   <span class="stat-value">{{ eff if eff is not none else '?' }}</span>
   {% if base is not none and eff is not none %}
   <span class="stat-formula">
-    {%- if delta == 0 -%}
-      = {{ base }}
-    {%- elif delta > 0 -%}
-      = {{ base }} + {{ delta }}
-    {%- else -%}
-      = {{ base }} − {{ -delta }}
+    <span class="f-base">{{ base }}</span>
+    {%- if delta > 0 -%}
+      <span class="f-bonus pos">+{{ delta }}</span>
+    {%- elif delta < 0 -%}
+      <span class="f-bonus neg">−{{ -delta }}</span>
     {%- endif -%}
   </span>
   {% endif %}
