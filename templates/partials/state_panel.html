@@ -125,11 +125,17 @@
 {# Объединённая секция "Аффекты" -- то же что показывает команда "аффекты"
    в игре. В JSONL приходят два разных списка:
      affects_list -- ch->affected[] (временные spell-эффекты с duration)
-     flags_list   -- AFF_FLAGS(ch) (все активные флаги, включая permanent
-                     от шмота: ускорение, каменные руки, дыхание под водой)
-   Здесь склеиваем в один chip-list, у временных рядом с именем -- (Nt). #}
+     flags_list   -- AFF_FLAGS(ch) (все активные флаги: шмот, класс,
+                     спец-проки, плюс эхо от spell-эффектов)
+   Spell-эффект из affects_list одновременно сидит и в flags_list под
+   тем же именем -- дедуплицируем, чтобы не было двух чипов одного и
+   того же. #}
 {% set spell_affs = (snapshot.get('affects_list') or '').split('|') | reject('equalto', '') | list %}
-{% set flag_affs  = (snapshot.get('flags_list') or '').split('|') | reject('equalto', '') | list %}
+{% set flag_affs_raw = (snapshot.get('flags_list') or '').split('|') | reject('equalto', '') | list %}
+{# Имя из affects_list имеет суффикс ' (Nt)' -- отрезаем, оставляем чистое имя #}
+{% set spell_names = [] %}
+{% for a in spell_affs %}{% set _ = spell_names.append(a.rsplit(' (', 1)[0]) %}{% endfor %}
+{% set flag_affs = flag_affs_raw | reject('in', spell_names) | list %}
 {% set total = (spell_affs|length) + (flag_affs|length) %}
 <section class="state-section">
   <h4>Аффекты ({{ total }})</h4>
@@ -140,7 +146,7 @@
       <li title="временный (spell-affect)">{{ a }}</li>
     {% endfor %}
     {% for f in flag_affs %}
-      <li class="aff-permanent" title="постоянный (от шмота)">{{ f }}</li>
+      <li class="aff-permanent" title="постоянный (шмот / класс / спец-эффект)">{{ f }}</li>
     {% endfor %}
     {% if snapshot.aff_silence and 'silence' not in (snapshot.get('flags_list') or '').lower() %}
       <li class="warn" title="блокирует магию">silence</li>
