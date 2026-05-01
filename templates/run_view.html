@@ -45,11 +45,26 @@
 
 <details class="analytics" id="analytics-pane" data-run-id="{{ handle.run_id }}">
   <summary>Аналитика</summary>
+  <div class="analytics-toolbar">
+    <label for="analytics-role">участник:</label>
+    <select id="analytics-role"></select>
+    <div class="analytics-totals" id="analytics-totals"></div>
+  </div>
   <div class="analytics-grid">
     <div class="chart-card chart-wide">
-      <h3>Урон по раундам — источник + кумулятив</h3>
-      <p class="chart-hint">Stacked area: per-round урон от melee хозяина / spell хозяина / pets. Линия — кумулятивный урон (правая ось).</p>
-      <div class="chart-wrap"><canvas id="chart-breakdown"></canvas></div>
+      <h3>Исходящий урон (real)</h3>
+      <p class="chart-hint">Стэк: melee / spell / урон петов. Пунктир — кумулятивный исходящий (правая ось).</p>
+      <div class="chart-wrap"><canvas id="chart-out"></canvas></div>
+    </div>
+    <div class="chart-card chart-wide">
+      <h3>Входящий урон — получено и поглощено</h3>
+      <p class="chart-hint">Стэк: получено по HP (real_dam) + поглощено защитами (dam − real_dam, шилды/уменьшения). Пунктир — кумулятивно полученное.</p>
+      <div class="chart-wrap"><canvas id="chart-in"></canvas></div>
+    </div>
+    <div class="chart-card chart-wide">
+      <h3>Попадания и промахи</h3>
+      <p class="chart-hint">Per-round счётчики: # своих ударов, # своих промахов, # принятых ударов, # уклонений. Криты — отдельной линией.</p>
+      <div class="chart-wrap"><canvas id="chart-tally"></canvas></div>
     </div>
   </div>
 </details>
@@ -116,114 +131,188 @@
 <script src="{{ url_for('static', filename='highlight-yaml.min.js') }}"></script>
 <script src="{{ url_for('static', filename='chart.umd.js') }}"></script>
 <script>
-// Analytics charts -- fetched & rendered once when the user opens the
-// <details> pane. Avoids paying the cost on every viewer load.
+// Аналитика: фетчим один раз, рендерим три графика, при смене роли
+// в селекторе пересчитываем datasets без повторного запроса. Чтобы
+// не обновлять Chart.js mutably (там есть свои подводные камни),
+// просто уничтожаем чарт и создаём заново -- объёмы данных здесь
+// небольшие, перерисовка дешёвая.
 (function () {
   const pane = document.getElementById('analytics-pane');
   if (!pane) return;
   let initialized = false;
+  let runData = null;
+  const charts = { out: null, in: null, tally: null };
+
+  const accent = '#ee854a', good = '#6acc64', info = '#5fadea',
+        warn  = '#f4d35e', bad  = '#d96764', mute = '#828a96';
+  const grid = 'rgba(255,255,255,0.06)';
+  const tickColor = '#828a96';
+  const fgColor   = '#d4d8df';
+  const sharedInteraction = { mode: 'index', intersect: false };
+  const commonOpts = () => ({
+    responsive: true, maintainAspectRatio: false,
+    interaction: sharedInteraction,
+    plugins: {
+      legend: { labels: { color: fgColor } },
+      tooltip: { ...sharedInteraction },
+    },
+    scales: {
+      x: { ticks: { color: tickColor, maxRotation: 0, autoSkip: true }, grid: { color: grid } },
+      y: { ticks: { color: tickColor }, grid: { color: grid }, beginAtZero: true },
+    },
+  });
+
+  const cumulative = (arr) => {
+    const out = new Array(arr.length); let s = 0;
+    for (let i = 0; i < arr.length; i++) { s += arr[i] || 0; out[i] = s; }
+    return out;
+  };
+  const sum = (arr) => arr.reduce((s, x) => s + (x || 0), 0);
+
+  function destroyAll() {
+    for (const k of Object.keys(charts)) {
+      if (charts[k]) { charts[k].destroy(); charts[k] = null; }
+    }
+  }
+
+  function renderTotals(role) {
+    const m = runData.roles[role];
+    const t = m.totals;
+    const totalsEl = document.getElementById('analytics-totals');
+    const hits = t.hits_dealt, misses = t.misses_dealt;
+    const hitRate = (hits + misses) ? (100 * hits / (hits + misses)).toFixed(1) : '—';
+    const critRate = hits ? (100 * t.crits_dealt / hits).toFixed(1) : '—';
+    totalsEl.innerHTML = `
+      <span><b>отдал:</b> ${t.dealt_melee + t.dealt_spell}</span>
+      <span><b>пет:</b> ${t.pets_dealt}</span>
+      <span><b>принял:</b> ${t.taken}</span>
+      <span><b>поглотил:</b> ${t.absorbed}</span>
+      <span><b>попал:</b> ${hits}/${hits + misses} (${hitRate}%)</span>
+      <span><b>крит:</b> ${t.crits_dealt} (${critRate}%)</span>
+      <span><b>уклон:</b> ${t.misses_taken}/${t.hits_taken + t.misses_taken}</span>`;
+  }
+
+  function rgba(hex, alpha) {
+    // Преобразуем '#rrggbb' в 'rgba(r, g, b, alpha)' для заливки area.
+    const n = parseInt(hex.slice(1), 16);
+    return `rgba(${(n>>16)&255}, ${(n>>8)&255}, ${n&255}, ${alpha})`;
+  }
+
+  function renderRole(role) {
+    destroyAll();
+    const m = runData.roles[role];
+    if (!m) return;
+    const labels = runData.labels;
+    const useArea = labels.length > 60;
+    const baseDS = (label, data, color, stack, opts={}) => ({
+      label, data,
+      backgroundColor: rgba(color, 0.55),
+      borderColor: color,
+      fill: useArea ? (opts.fillFirst ? 'origin' : '-1') : false,
+      tension: 0.2, pointRadius: 0,
+      stack, yAxisID: 'y',
+      ...opts.extra,
+    });
+    const cumLine = (label, data, color) => ({
+      type: 'line', label, data,
+      borderColor: color, borderDash: [4, 3],
+      backgroundColor: 'transparent', fill: false,
+      tension: 0.1, pointRadius: 0, pointHoverRadius: 4,
+      yAxisID: 'y2',
+    });
+
+    const cumOut = cumulative(
+      m.dealt_melee.map((v, i) => v + (m.dealt_spell[i] || 0) + (m.pets_dealt[i] || 0)));
+
+    charts.out = new Chart(document.getElementById('chart-out'), {
+      type: useArea ? 'line' : 'bar',
+      data: { labels, datasets: [
+        baseDS('melee',   m.dealt_melee, info,   'd', { fillFirst: true }),
+        baseDS('spell',   m.dealt_spell, accent, 'd'),
+        baseDS('пет',     m.pets_dealt,  good,   'd'),
+        cumLine('итого с начала', cumOut, fgColor),
+      ]},
+      options: dualAxis('урон/раунд', 'итого'),
+    });
+
+    const cumTaken = cumulative(m.taken);
+    charts.in = new Chart(document.getElementById('chart-in'), {
+      type: useArea ? 'line' : 'bar',
+      data: { labels, datasets: [
+        baseDS('получено',  m.taken,    bad,  'i', { fillFirst: true }),
+        baseDS('поглощено', m.absorbed, info, 'i'),
+        cumLine('итого получено', cumTaken, fgColor),
+      ]},
+      options: dualAxis('урон/раунд', 'итого получено'),
+    });
+
+    charts.tally = new Chart(document.getElementById('chart-tally'), {
+      type: 'line',
+      data: { labels, datasets: [
+        { label: 'попал',     data: m.hits_dealt,   borderColor: good,  backgroundColor: rgba(good,0.15), tension: 0.25, pointRadius: 0 },
+        { label: 'промах',    data: m.misses_dealt, borderColor: warn,  backgroundColor: 'transparent',   tension: 0.25, pointRadius: 0, borderDash: [4,3] },
+        { label: 'принял',    data: m.hits_taken,   borderColor: bad,   backgroundColor: rgba(bad,0.15),  tension: 0.25, pointRadius: 0 },
+        { label: 'уклонился', data: m.misses_taken, borderColor: mute,  backgroundColor: 'transparent',   tension: 0.25, pointRadius: 0, borderDash: [4,3] },
+        { label: 'крит',      data: m.crits_dealt,  borderColor: accent,backgroundColor: 'transparent',   tension: 0.25, pointRadius: 2 },
+      ]},
+      options: { ...commonOpts(),
+        scales: {
+          x: { ...commonOpts().scales.x },
+          y: { ...commonOpts().scales.y, title: { display: true, text: '# / раунд', color: tickColor } },
+        },
+      },
+    });
+
+    renderTotals(role);
+  }
+
+  function dualAxis(leftTitle, rightTitle) {
+    const c = commonOpts();
+    return { ...c,
+      plugins: {
+        ...c.plugins,
+        tooltip: {
+          ...sharedInteraction,
+          callbacks: {
+            footer: (items) => {
+              const perRound = items
+                .filter(it => it.dataset.yAxisID === 'y')
+                .reduce((s, it) => s + (it.parsed.y || 0), 0);
+              return 'за раунд: ' + perRound;
+            },
+          },
+        },
+      },
+      scales: {
+        x: { ...c.scales.x, stacked: true },
+        y: { ...c.scales.y, stacked: true, position: 'left',
+             title: { display: true, text: leftTitle, color: tickColor } },
+        y2: { position: 'right', beginAtZero: true,
+              grid: { drawOnChartArea: false }, ticks: { color: tickColor },
+              title: { display: true, text: rightTitle, color: tickColor } },
+      },
+    };
+  }
+
   pane.addEventListener('toggle', async () => {
     if (!pane.open || initialized || !window.Chart) return;
     initialized = true;
     const r = await fetch(`/runs/${pane.dataset.runId}/api/analytics`, {credentials: 'include'});
     if (!r.ok) return;
-    const data = await r.json();
-    if (!data.labels.length) return;
-    const accent = '#ee854a', good = '#6acc64', info = '#5fadea';
-    const grid = 'rgba(255,255,255,0.06)';
-    const tickColor = '#828a96';
-    // Shared tooltip / hover: показывать значения ВСЕХ datasets на одном
-    // X-делении при наведении куда угодно по горизонтали (а не только
-    // если курсор попал в саму точку/бар).
-    const sharedInteraction = { mode: 'index', intersect: false };
-    const common = {
-      responsive: true, maintainAspectRatio: false,
-      interaction: sharedInteraction,
-      plugins: {
-        legend: { labels: { color: '#d4d8df' } },
-        tooltip: { ...sharedInteraction },
-      },
-      scales: {
-        x: { ticks: { color: tickColor, maxRotation: 0, autoSkip: true }, grid: { color: grid } },
-        y: { ticks: { color: tickColor }, grid: { color: grid }, beginAtZero: true },
-      },
-    };
-
-    // На длинных прогонах bar превращается в кашу шириной в пиксель,
-    // используем stacked area; на коротких -- bar читается лучше.
-    const useArea = data.labels.length > 60;
-    new Chart(document.getElementById('chart-breakdown'), {
-      type: useArea ? 'line' : 'bar',
-      data: { labels: data.labels, datasets: [
-        {
-          label: 'melee хозяина', data: data.damage_breakdown.master_melee,
-          backgroundColor: useArea ? 'rgba(95,173,234,0.55)' : info,
-          borderColor: info,
-          fill: useArea ? 'origin' : false,
-          tension: 0.2, pointRadius: 0,
-          stack: 'd', yAxisID: 'y',
-        },
-        {
-          label: 'spell хозяина', data: data.damage_breakdown.master_spell,
-          backgroundColor: useArea ? 'rgba(238,133,74,0.55)' : accent,
-          borderColor: accent,
-          fill: useArea ? '-1' : false,
-          tension: 0.2, pointRadius: 0,
-          stack: 'd', yAxisID: 'y',
-        },
-        {
-          label: 'pets', data: data.damage_breakdown.pets,
-          backgroundColor: useArea ? 'rgba(106,204,100,0.55)' : good,
-          borderColor: good,
-          fill: useArea ? '-1' : false,
-          tension: 0.2, pointRadius: 0,
-          stack: 'd', yAxisID: 'y',
-        },
-        {
-          // Cumulative line on the right Y axis -- separate scale so
-          // it doesn't squash per-round bars to nothing.
-          type: 'line',
-          label: 'итого с начала боя',
-          data: data.cumulative,
-          borderColor: '#d4d8df',
-          borderDash: [4, 3],
-          backgroundColor: 'transparent',
-          fill: false,
-          tension: 0.1, pointRadius: 0, pointHoverRadius: 4,
-          yAxisID: 'y2',
-        },
-      ]},
-      options: { ...common,
-        plugins: {
-          ...common.plugins,
-          tooltip: {
-            ...sharedInteraction,
-            callbacks: {
-              footer: (items) => {
-                const perRound = items
-                  .filter(it => it.dataset.yAxisID === 'y')
-                  .reduce((s, it) => s + (it.parsed.y || 0), 0);
-                return 'за раунд: ' + perRound;
-              },
-            },
-          },
-        },
-        scales: {
-          x: { ...common.scales.x, stacked: true },
-          y: {
-            ...common.scales.y, stacked: true, position: 'left',
-            title: { display: true, text: 'урон/раунд', color: tickColor },
-          },
-          y2: {
-            position: 'right',
-            beginAtZero: true,
-            grid: { drawOnChartArea: false },
-            ticks: { color: tickColor },
-            title: { display: true, text: 'итого', color: tickColor },
-          },
-        },
-      },
-    });
+    runData = await r.json();
+    if (!runData.labels.length) return;
+    const sel = document.getElementById('analytics-role');
+    sel.innerHTML = '';
+    // По умолчанию выбираем 'attacker' если есть, иначе первую роль.
+    const roles = Object.keys(runData.roles);
+    for (const role of roles) {
+      const opt = document.createElement('option');
+      opt.value = role; opt.textContent = role;
+      if (role === 'attacker') opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => renderRole(sel.value));
+    renderRole(sel.value || roles[0]);
   });
 })();
 </script>

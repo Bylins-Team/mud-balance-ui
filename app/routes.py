@@ -161,15 +161,25 @@ def run_status(run_id: str):
 
 @bp.route("/runs/<run_id>/api/analytics")
 def api_analytics(run_id: str):
-    """Per-round aggregates for the analytics panel charts.
+    """Per-role per-round aggregates for the analytics panel charts.
 
-    Returns:
-      labels:     ["round 0", "round 1", ...] (length = rounds)
-      hp_victim:  victim HP after each round (from `round` events)
-      damage_breakdown: {
-          master_melee: [...], master_spell: [...], pets: [...]
-      } -- per-round damage from `damage` events grouped by attacker.
-      cumulative: total damage cumulatively per round.
+    Симулятор эмитит damage и miss события с attacker_name/victim_name.
+    Чтобы сопоставить имя с «ролью» (attacker / victim / attacker_pet_N /
+    victim_pet_N) сначала проходимся по char_state'ам -- они эмитятся в
+    самом начале и содержат связку target_name → role.
+
+    Возвращаем один объект `roles[role]` с массивами длины rounds:
+      dealt_melee[], dealt_spell[]   — исходящий урон (real_dam) этой роли
+      pets_dealt[]                   — исходящий урон петов этой роли (для
+                                       мастера); у самого пета остаётся в
+                                       dealt_melee/dealt_spell
+      taken[]                        — входящий урон (real_dam, что прошло)
+      absorbed[]                     — поглощённый щитом/уменьшениями
+                                       (dam - real_dam)
+      hits_dealt[], misses_dealt[]   — # попаданий / # промахов (отдал)
+      hits_taken[], misses_taken[]   — # попаданий / # промахов (принял)
+      crits_dealt[]                  — # критов (отдал)
+    А также total -- агрегаты на весь бой.
     """
     handle = storage.get_run(current_app.config["RUNS_DIR"], run_id)
     if handle is None:
@@ -178,52 +188,109 @@ def api_analytics(run_id: str):
     round_ts = meta.get("round_ts") or []
     rounds = len(round_ts)
     if not rounds:
-        return jsonify({"labels": [], "hp_victim": [], "damage_breakdown": {}, "cumulative": []})
-
-    melee = [0] * rounds
-    spell = [0] * rounds
-    pet   = [0] * rounds
-    hp_victim = [0] * rounds
+        return jsonify({"labels": [], "rounds": 0, "roles": {}})
 
     def round_for_ts(ts: int) -> int:
-        # First round whose ts >= event.ts -- that's "this damage is part of round N"
         for i, r_ts in enumerate(round_ts):
             if ts <= r_ts:
                 return i
         return rounds - 1
 
+    name_to_role: dict[str, str] = {}
+    role_owner: dict[str, str] = {}  # pet role -> master role
+    for ev in _iter_events(handle.events_path):
+        if ev.get("name") != "char_state":
+            continue
+        n = ev.get("target_name") or ""
+        r = ev.get("role") or ""
+        if n and r and n not in name_to_role:
+            name_to_role[n] = r
+        if r.startswith("attacker_pet"):
+            role_owner[r] = "attacker"
+        elif r.startswith("victim_pet"):
+            role_owner[r] = "victim"
+
+    if not name_to_role:
+        return jsonify({"labels": [], "rounds": 0, "roles": {}})
+
+    def zeros() -> list[int]:
+        return [0] * rounds
+
+    metric_keys = (
+        "dealt_melee", "dealt_spell", "pets_dealt",
+        "taken", "absorbed",
+        "hits_dealt", "misses_dealt",
+        "hits_taken", "misses_taken",
+        "crits_dealt",
+    )
+    roles = sorted(set(name_to_role.values()))
+    data: dict[str, dict[str, list[int]]] = {
+        role: {k: zeros() for k in metric_keys} for role in roles
+    }
+
     for ev in _iter_events(handle.events_path):
         name = ev.get("name")
         ts = int(ev.get("ts", 0))
         if name == "damage":
+            att = ev.get("attacker_name") or ""
+            vict = ev.get("victim_name") or ""
+            att_role = name_to_role.get(att)
+            vict_role = name_to_role.get(vict)
             r = round_for_ts(ts)
+            if not 0 <= r < rounds:
+                continue
+            real_dam = int(ev.get("real_dam", 0))
             dam = int(ev.get("dam", 0))
-            if ev.get("attacker_is_charmie"):
-                pet[r] += dam
-            elif int(ev.get("spell_id", 0)) != 0:
-                spell[r] += dam
-            else:
-                melee[r] += dam
-        elif name == "round":
-            r = int(ev.get("round", -1))
-            if 0 <= r < rounds:
-                hp_victim[r] = int(ev.get("hp_after", 0))
+            absorbed_n = max(0, dam - real_dam)
+            is_spell = int(ev.get("spell_id", 0)) != 0
+            is_charmie = bool(ev.get("attacker_is_charmie"))
+            if att_role and att_role in data:
+                row = data[att_role]
+                row["hits_dealt"][r] += 1
+                if ev.get("crit"):
+                    row["crits_dealt"][r] += 1
+                if is_spell:
+                    row["dealt_spell"][r] += real_dam
+                else:
+                    row["dealt_melee"][r] += real_dam
+                # Урон пета поднимаем в строку мастера в pets_dealt --
+                # чтобы график «исходящий» у роли attacker показывал и
+                # его собственные удары, и удары его свиты.
+                if is_charmie:
+                    owner = role_owner.get(att_role)
+                    if owner and owner in data:
+                        data[owner]["pets_dealt"][r] += real_dam
+            if vict_role and vict_role in data:
+                row = data[vict_role]
+                row["taken"][r] += real_dam
+                row["absorbed"][r] += absorbed_n
+                row["hits_taken"][r] += 1
+        elif name == "miss":
+            att = ev.get("attacker_name") or ""
+            vict = ev.get("victim_name") or ""
+            att_role = name_to_role.get(att)
+            vict_role = name_to_role.get(vict)
+            r = round_for_ts(ts)
+            if not 0 <= r < rounds:
+                continue
+            if att_role and att_role in data:
+                data[att_role]["misses_dealt"][r] += 1
+            if vict_role and vict_role in data:
+                data[vict_role]["misses_taken"][r] += 1
 
-    cumulative = []
-    running = 0
-    for i in range(rounds):
-        running += melee[i] + spell[i] + pet[i]
-        cumulative.append(running)
+    # Totals + cumulative для удобства фронта.
+    out_roles: dict[str, dict] = {}
+    for role, m in data.items():
+        totals = {k: sum(v) for k, v in m.items()}
+        out_roles[role] = {
+            **m,
+            "totals": totals,
+        }
 
     return jsonify({
         "labels": [f"R{i}" for i in range(rounds)],
-        "hp_victim": hp_victim,
-        "damage_breakdown": {
-            "master_melee": melee,
-            "master_spell": spell,
-            "pets": pet,
-        },
-        "cumulative": cumulative,
+        "rounds": rounds,
+        "roles": out_roles,
     })
 
 

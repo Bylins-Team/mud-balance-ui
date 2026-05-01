@@ -966,6 +966,36 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
 .analytics-grid .chart-wide { grid-column: 1 / -1; }
 .analytics-grid .chart-wide .chart-wrap { height: 340px; }
 
+/* Тулбар над графиками: селектор роли + быстрые суммарные числа. */
+.analytics-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 0;
+  font-size: 12px;
+  color: var(--fg-dim);
+}
+.analytics-toolbar label { font-weight: 500; }
+.analytics-toolbar select {
+  background: var(--bg-elev);
+  color: var(--fg);
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.analytics-totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+.analytics-totals span { white-space: nowrap; }
+.analytics-totals b { color: var(--fg); font-weight: 500; }
+
 /* viewer layout: 3 columns + bottom timeline. Computed-grid heights. */
 .viewer { display: flex; flex-direction: column; gap: 12px; }
 .viewer-row {
