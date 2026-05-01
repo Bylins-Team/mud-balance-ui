@@ -13,7 +13,8 @@
     {% if snapshot.is_npc %}
       {{ snapshot.short_descr or snapshot.target_name }}
     {% else %}
-      {{ snapshot.target_name }}{% if snapshot.class_name %}, {{ snapshot.class_name }}{% endif %} <span class="ident-lvl">lvl {{ snapshot.level }}</span>
+      {{ snapshot.target_name }}{% if snapshot.class_name %}, {{ snapshot.class_name }}{% endif %}
+      <span class="ident-lvl">lvl {{ snapshot.level }}{% if snapshot.get('remort') %} <span class="ident-rem">r{{ snapshot.remort }}</span>{% endif %}</span>
     {% endif %}
   </div>
 </section>
@@ -21,14 +22,28 @@
 
 {% set has_stats = snapshot.get('str') is not none or snapshot.get('dex') is not none %}
 {% if has_stats %}
+{# Эффективное число -- крупно (это "финальный" стат, который читает
+   движок боя). База + дельта от шмота/аффектов -- ниже мелким, чтобы
+   не путалось с "75 + 50 = 125": здесь 75 уже включает в себя 25 базы
+   плюс +50 от шмота. #}
 {% macro stat_cell(label, key) %}
 {% set eff = snapshot.get(key) %}
 {% set base = snapshot.get(key ~ '_base') %}
-<div class="stat" title="{% if base is not none and base != eff %}база {{ base }} + апплаи{% else %}база{% endif %}">
+{% set delta = (eff - base) if (eff is not none and base is not none) else 0 %}
+<div class="stat" title="итог {{ eff }} = база {{ base }}{% if delta %} {% if delta > 0 %}+ {{ delta }}{% else %}- {{ -delta }}{% endif %} от шмота/аффектов{% endif %}">
   <span class="stat-label">{{ label }}</span>
-  <span class="stat-value">
-    {{ eff if eff is not none else '?' }}{% if base is not none and eff is not none and base != eff %}<span class="stat-diff{% if eff < base %} negative{% endif %}">{% if eff > base %}+{{ eff - base }}{% else %}{{ eff - base }}{% endif %}</span>{% endif %}
+  <span class="stat-value">{{ eff if eff is not none else '?' }}</span>
+  {% if base is not none and eff is not none %}
+  <span class="stat-formula">
+    {%- if delta == 0 -%}
+      = {{ base }}
+    {%- elif delta > 0 -%}
+      = {{ base }} + {{ delta }}
+    {%- else -%}
+      = {{ base }} − {{ -delta }}
+    {%- endif -%}
   </span>
+  {% endif %}
 </div>
 {% endmacro %}
 <section class="state-section">
@@ -44,12 +59,18 @@
 </section>
 {% endif %}
 
+{# Engine EPosition values (см. structs/structs.h). Фолбек на число
+   на случай если движок добавил новое значение. #}
+{% set positions = {
+    0: 'мёртв', 1: 'смертельно ранен', 2: 'без сознания', 3: 'оглушён',
+    4: 'спит',  5: 'отдыхает', 6: 'сидит', 7: 'дерётся', 8: 'стоит',
+} %}
 <section class="state-section">
   <h4>Жизнь</h4>
   <dl class="state-grid">
     <dt>HP</dt><dd>{{ snapshot.hp }} / {{ snapshot.max_hp }}</dd>
     <dt>move</dt><dd>{{ snapshot.move }} / {{ snapshot.max_move }}</dd>
-    <dt>position</dt><dd>{{ snapshot.position }}</dd>
+    <dt>position</dt><dd>{{ positions.get(snapshot.position, snapshot.position) }}</dd>
   </dl>
 </section>
 
