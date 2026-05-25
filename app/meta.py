@@ -33,6 +33,9 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
     # viewer to populate the role <select> -- so attacker_pet_N / victim_pet_N
     # become selectable when the scenario had pets.
     roles: list[str] = []
+    # Engine build identity, emitted by mud-sim as the first `build_info`
+    # event. Lets the UI show which engine revision a run was computed on.
+    build_info: dict | None = None
 
     if events_path.is_file():
         with events_path.open() as fh:
@@ -48,7 +51,14 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
                         first_ts = ts
                     last_ts = ts
                 name = ev.get("name")
-                if name == "damage":
+                if name == "build_info":
+                    build_info = {
+                        "revision": ev.get("revision") or "",
+                        "build_datetime": ev.get("build_datetime") or "",
+                        "build_compiler": ev.get("build_compiler") or "",
+                        "build_features": ev.get("build_features") or "",
+                    }
+                elif name == "damage":
                     damage_sum += int(ev.get("dam", 0))
                     damage_count += 1
                 elif name == "miss":
@@ -90,4 +100,5 @@ def summarize(events_path: Path, scenario_yaml_utf8: str) -> dict:
         "victim": victim_label or "?",
         "first_ts_ms": first_ts,
         "last_ts_ms": last_ts,
+        "build_info": build_info,
     }

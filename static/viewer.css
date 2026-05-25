@@ -797,6 +797,19 @@ button.secondary:hover { color: var(--fg); border-color: #3a414a; }
 .vs-sep { color: var(--fg-mute); margin: 0 6px; font-size: 0.8em; }
 .back-link { font-size: 12px; color: var(--fg-dim); }
 .run-header-actions { display: flex; align-items: center; gap: 14px; margin-top: 4px; }
+.build-info {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--fg-mute);
+  cursor: help;
+}
+.build-info code {
+  font-family: ui-monospace, monospace;
+  color: var(--fg-dim);
+  background: var(--bg-elev);
+  padding: 0 5px;
+  border-radius: 3px;
+}
 .repeat-btn {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 12px;
